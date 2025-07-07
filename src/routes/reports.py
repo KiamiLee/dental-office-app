@@ -1,4 +1,5 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request, jsonify
+from flask_login import login_required
 from src.models.appointment import Appointment, db
 from src.models.patient import Patient
 from src.models.treatment import Treatment
@@ -8,6 +9,7 @@ from sqlalchemy import func, extract
 reports_bp = Blueprint('reports', __name__)
 
 @reports_bp.route('/reports/dashboard', methods=['GET'])
+@login_required
 def get_dashboard_stats():
     """Get dashboard statistics"""
     today = datetime.now().date()
@@ -51,7 +53,8 @@ def get_dashboard_stats():
     })
 
 @reports_bp.route('/reports/appointments', methods=['GET'])
-def get_appointment_report():
+@login_required
+def get_appointment_reports():
     """Get appointment statistics for a date range"""
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
@@ -99,7 +102,8 @@ def get_appointment_report():
     })
 
 @reports_bp.route('/reports/patients', methods=['GET'])
-def get_patient_report():
+@login_required
+def get_patient_reports():
     """Get patient statistics"""
     # New patients by month (last 12 months)
     twelve_months_ago = datetime.now().date().replace(day=1) - timedelta(days=365)
@@ -141,7 +145,8 @@ def get_patient_report():
     })
 
 @reports_bp.route('/reports/revenue', methods=['GET'])
-def get_revenue_report():
+@login_required
+def get_revenue_reports():
     """Get revenue statistics (based on completed appointments and treatment prices)"""
     start_date_str = request.args.get('start_date')
     end_date_str = request.args.get('end_date')
