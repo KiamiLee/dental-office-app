@@ -76,7 +76,7 @@ function showSection(sectionName) {
             loadTreatments();
             break;
         case 'reports':
-            // Reports are loaded on demand
+            showReportsWithData();
             break;
     }
 }
@@ -846,5 +846,71 @@ function showError(message) {
     alert('Error: ' + message);
 }
 
+// Missing Treatment functions
+function editTreatment(treatmentId) {
+    const treatment = treatments.find(t => t.id === treatmentId);
+    if (!treatment) {
+        showError('Treatment not found');
+        return;
+    }
+
+    // Populate the form with treatment data
+    document.getElementById('treatment-id').value = treatment.id;
+    document.getElementById('treatment-name').value = treatment.name;
+    document.getElementById('treatment-description').value = treatment.description || '';
+    document.getElementById('treatment-duration').value = treatment.duration_minutes;
+    document.getElementById('treatment-price').value = treatment.price || '';
+    document.getElementById('treatment-active').checked = treatment.is_active;
+
+    // Update modal title
+    document.getElementById('treatmentModalTitle').textContent = 'Edit Treatment';
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('treatmentModal'));
+    modal.show();
+}
+
+async function deleteTreatment(treatmentId) {
+    if (!confirm('Are you sure you want to delete this treatment?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/treatments/${treatmentId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            loadTreatments();
+            showSuccess('Treatment deleted successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to delete treatment');
+        }
+    } catch (error) {
+        console.error('Error deleting treatment:', error);
+        showError('Failed to delete treatment');
+    }
+}
+
+// Enhanced Reports functionality
+function showReportsWithData() {
+    const container = document.getElementById('reports-content');
+    
+    // Show a message if no date range is selected
+    container.innerHTML = `
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle me-2"></i>Generate Reports</h5>
+            <p>Select a date range above and click "Generate Reports" to view detailed analytics and charts.</p>
+            <p><strong>Available Reports:</strong></p>
+            <ul>
+                <li>Appointments by Status (Scheduled, Completed, Cancelled, No-show)</li>
+                <li>Appointments by Treatment Type</li>
+                <li>Daily Appointment Trends</li>
+                <li>Revenue Analysis by Treatment</li>
+            </ul>
+        </div>
+    `;
+}
 
 
