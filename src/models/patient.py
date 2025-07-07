@@ -1,48 +1,123 @@
+from flask import Blueprint, request, jsonify
+from flask_login import login_required
+from src.models.patient import Patient, db
 from datetime import datetime
-from src.models.base import db
 
-class Patient(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    first_name = db.Column(db.String(50), nullable=False)
-    last_name = db.Column(db.String(50), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    phone = db.Column(db.String(20), nullable=False)
-    date_of_birth = db.Column(db.Date, nullable=True)
-    address = db.Column(db.Text, nullable=True)
-    medical_history = db.Column(db.Text, nullable=True)
-    insurance_provider = db.Column(db.String(100), nullable=True)
-    insurance_id = db.Column(db.String(50), nullable=True)
-    emergency_contact_name = db.Column(db.String(100), nullable=True)
-    emergency_contact_phone = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+patient_bp = Blueprint('patient', __name__)
 
-    # Relationship with appointments
-    appointments = db.relationship("Appointment", backref="patient", lazy=True, cascade="all, delete-orphan")
+@patient_bp.route('/patients', methods=['GET'])
+@login_required
+def get_patients():
+    """Get all patients"""
+    patients = Patient.query.all()
+    return jsonify([patient.to_dict() for patient in patients])
 
-    def __repr__(self):
-        return f"<Patient {self.first_name} {self.last_name}>"
+@patient_bp.route('/patients', methods=['POST'])
+@login_required
+def create_patient():
+    """Create a new patient"""
+    data = request.json
+    
+    # Convert date_of_birth string to date object if provided
+    date_of_birth = None
+    if data.get('date_of_birth'):
+        try:
+            date_of_birth = datetime.strptime(data['date_of_birth'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    
+    patient = Patient(
+        first_name=data['first_name'],
+        last_name=data['last_name'],
+        email=data['email'],
+        phone=data['phone'],
+        date_of_birth=date_of_birth,
+        address=data.get('address'),
+        medical_history=data.get('medical_history'),
+        insurance_provider=data.get('insurance_provider'),
+        insurance_id=data.get('insurance_id'),
+        emergency_contact_name=data.get('emergency_contact_name'),
+        emergency_contact_phone=data.get('emergency_contact_phone')
+    )
+    
+    try:
+        db.session.add(patient)
+        db.session.commit()
+        return jsonify(patient.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create patient'}), 500
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "first_name": self.first_name,
-            "last_name": self.last_name,
-            "email": self.email,
-            "phone": self.phone,
-            "date_of_birth": self.date_of_birth.isoformat() if self.date_of_birth else None,
-            "address": self.address,
-            "medical_history": self.medical_history,
-            "insurance_provider": self.insurance_provider,
-            "insurance_id": self.insurance_id,
-            "emergency_contact_name": self.emergency_contact_name,
-            "emergency_contact_phone": self.emergency_contact_phone,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
-        }
+@patient_bp.route('/patients/<int:patient_id>', methods=['GET'])
+@login_required
+def get_patient(patient_id):
+    """Get a specific patient"""
+    patient = Patient.query.get_or_404(patient_id)
+    return jsonify(patient.to_dict())
 
-    def full_name(self):
-        return f"{self.first_name} {self.last_name}"
+@patient_bp.route('/patients/<int:patient_id>', methods=['PUT'])
+@login_required
+def update_patient(patient_id):
+    """Update a patient"""
+    patient = Patient.query.get_or_404(patient_id)
+    data = request.json
+    
+    # Update fields
+    patient.first_name = data.get('first_name', patient.first_name)
+    patient.last_name = data.get('last_name', patient.last_name)
+    patient.email = data.get('email', patient.email)
+    patient.phone = data.get('phone', patient.phone)
+    patient.address = data.get('address', patient.address)
+    patient.medical_history = data.get('medical_history', patient.medical_history)
+    patient.insurance_provider = data.get('insurance_provider', patient.insurance_provider)
+    patient.insurance_id = data.get('insurance_id', patient.insurance_id)
+    patient.emergency_contact_name = data.get('emergency_contact_name', patient.emergency_contact_name)
+    patient.emergency_contact_phone = data.get('emergency_contact_phone', patient.emergency_contact_phone)
+    
+    # Handle date_of_birth update
+    if data.get('date_of_birth'):
+        try:
+            patient.date_of_birth = datetime.strptime(data['date_of_birth'], '%Y-%m-%d').date()
+        except ValueError:
+            return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
+    
+    try:
+        db.session.commit()
+        return jsonify(patient.to_dict())
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update patient'}), 500
 
+@patient_bp.route('/patients/<int:patient_id>', methods=['DELETE'])
+@login_required
+def delete_patient(patient_id):
+    """Delete a patient"""
+    patient = Patient.query.get_or_404(patient_id)
+    
+    try:
+        db.session.delete(patient)
+        db.session.commit()
+        return '', 204
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete patient'}), 500
 
+@patient_bp.route('/patients/search', methods=['GET'])
+@login_required
+def search_patients():
+    """Search patients by name, email, or phone"""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return jsonify([])
+    
+    patients = Patient.query.filter(
+        db.or_(
+            Patient.first_name.ilike(f'%{query}%'),
+            Patient.last_name.ilike(f'%{query}%'),
+            Patient.email.ilike(f'%{query}%'),
+            Patient.phone.ilike(f'%{query}%')
+        )
+    ).all()
+    
+    return jsonify([patient.to_dict() for patient in patients])
 
