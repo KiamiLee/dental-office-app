@@ -72,6 +72,11 @@ def create_appointment():
         db.session.rollback()
         return jsonify({'error': 'Failed to create appointment'}), 500
 
+@appointment_bp.route('/appointments/<int:appointment_id>', methods=['GET'])
+def get_appointment(appointment_id):
+    appointment = Appointment.query.get_or_404(appointment_id)
+    return jsonify(appointment.to_dict())
+
 @appointment_bp.route('/appointments/<int:appointment_id>', methods=['PUT'])
 def update_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
