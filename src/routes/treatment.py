@@ -1,9 +1,11 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request, jsonify
+from flask_login import login_required
 from src.models.treatment import Treatment, db
 
 treatment_bp = Blueprint('treatment', __name__)
 
 @treatment_bp.route('/treatments', methods=['GET'])
+@login_required
 def get_treatments():
     """Get all treatments"""
     active_only = request.args.get('active_only', 'false').lower() == 'true'
@@ -16,6 +18,7 @@ def get_treatments():
     return jsonify([treatment.to_dict() for treatment in treatments])
 
 @treatment_bp.route('/treatments', methods=['POST'])
+@login_required
 def create_treatment():
     """Create a new treatment"""
     data = request.json
@@ -37,12 +40,14 @@ def create_treatment():
         return jsonify({'error': 'Failed to create treatment'}), 500
 
 @treatment_bp.route('/treatments/<int:treatment_id>', methods=['GET'])
+@login_required
 def get_treatment(treatment_id):
     """Get a specific treatment"""
     treatment = Treatment.query.get_or_404(treatment_id)
     return jsonify(treatment.to_dict())
 
 @treatment_bp.route('/treatments/<int:treatment_id>', methods=['PUT'])
+@login_required
 def update_treatment(treatment_id):
     """Update a treatment"""
     treatment = Treatment.query.get_or_404(treatment_id)
@@ -62,6 +67,7 @@ def update_treatment(treatment_id):
         return jsonify({'error': 'Failed to update treatment'}), 500
 
 @treatment_bp.route('/treatments/<int:treatment_id>', methods=['DELETE'])
+@login_required
 def delete_treatment(treatment_id):
     """Delete a treatment"""
     treatment = Treatment.query.get_or_404(treatment_id)
