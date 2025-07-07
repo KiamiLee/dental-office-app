@@ -1,4 +1,5 @@
 from flask import Blueprint, request, jsonify
+from flask_login import login_required
 from datetime import datetime, timedelta
 from src.models.base import db
 from src.models.appointment import Appointment
@@ -7,6 +8,7 @@ from src.models.patient import Patient
 appointment_bp = Blueprint('appointment', __name__)
 
 @appointment_bp.route('/appointments', methods=['GET'])
+@login_required
 def get_appointments():
     date_filter = request.args.get('date')
     status_filter = request.args.get('status')
@@ -27,6 +29,7 @@ def get_appointments():
     return jsonify([appointment.to_dict() for appointment in appointments])
 
 @appointment_bp.route('/appointments', methods=['POST'])
+@login_required
 def create_appointment():
     data = request.get_json()
     
@@ -73,11 +76,13 @@ def create_appointment():
         return jsonify({'error': 'Failed to create appointment'}), 500
 
 @appointment_bp.route('/appointments/<int:appointment_id>', methods=['GET'])
+@login_required
 def get_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
     return jsonify(appointment.to_dict())
 
 @appointment_bp.route('/appointments/<int:appointment_id>', methods=['PUT'])
+@login_required
 def update_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
     data = request.get_json()
@@ -116,6 +121,7 @@ def update_appointment(appointment_id):
         return jsonify({'error': 'Failed to update appointment'}), 500
 
 @appointment_bp.route('/appointments/<int:appointment_id>', methods=['DELETE'])
+@login_required
 def delete_appointment(appointment_id):
     appointment = Appointment.query.get_or_404(appointment_id)
     
@@ -128,6 +134,7 @@ def delete_appointment(appointment_id):
         return jsonify({'error': 'Failed to delete appointment'}), 500
 
 @appointment_bp.route('/appointments/upcoming', methods=['GET'])
+@login_required
 def get_upcoming_appointments():
     now = datetime.now()
     appointments = Appointment.query.filter(
@@ -138,6 +145,7 @@ def get_upcoming_appointments():
     return jsonify([appointment.to_dict() for appointment in appointments])
 
 @appointment_bp.route('/appointments/availability', methods=['GET'])
+@login_required
 def check_availability():
     date_str = request.args.get('date')
     duration = int(request.args.get('duration', 60))
