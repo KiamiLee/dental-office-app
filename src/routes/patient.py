@@ -1,16 +1,19 @@
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request, jsonify
+from flask_login import login_required
 from src.models.patient import Patient, db
 from datetime import datetime
 
 patient_bp = Blueprint('patient', __name__)
 
 @patient_bp.route('/patients', methods=['GET'])
+@login_required
 def get_patients():
     """Get all patients"""
     patients = Patient.query.all()
     return jsonify([patient.to_dict() for patient in patients])
 
 @patient_bp.route('/patients', methods=['POST'])
+@login_required
 def create_patient():
     """Create a new patient"""
     data = request.json
@@ -46,12 +49,14 @@ def create_patient():
         return jsonify({'error': 'Failed to create patient'}), 500
 
 @patient_bp.route('/patients/<int:patient_id>', methods=['GET'])
+@login_required
 def get_patient(patient_id):
     """Get a specific patient"""
     patient = Patient.query.get_or_404(patient_id)
     return jsonify(patient.to_dict())
 
 @patient_bp.route('/patients/<int:patient_id>', methods=['PUT'])
+@login_required
 def update_patient(patient_id):
     """Update a patient"""
     patient = Patient.query.get_or_404(patient_id)
@@ -84,6 +89,7 @@ def update_patient(patient_id):
         return jsonify({'error': 'Failed to update patient'}), 500
 
 @patient_bp.route('/patients/<int:patient_id>', methods=['DELETE'])
+@login_required
 def delete_patient(patient_id):
     """Delete a patient"""
     patient = Patient.query.get_or_404(patient_id)
@@ -97,6 +103,7 @@ def delete_patient(patient_id):
         return jsonify({'error': 'Failed to delete patient'}), 500
 
 @patient_bp.route('/patients/search', methods=['GET'])
+@login_required
 def search_patients():
     """Search patients by name, email, or phone"""
     query = request.args.get('q', '').strip()
