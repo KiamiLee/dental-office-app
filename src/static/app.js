@@ -5,15 +5,97 @@ let currentSection = 'dashboard';
 let patients = [];
 let appointments = [];
 let treatments = [];
+let currentUser = null;
 
 // API base URL
 const API_BASE = '/api';
 
+// Authenticated API helper function
+async function authenticatedFetch(url, options = {}) {
+    const defaultOptions = {
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+        }
+    };
+    
+    const response = await fetch(url, { ...defaultOptions, ...options });
+    
+    // Check if authentication failed
+    if (response.status === 401) {
+        window.location.href = '/api/login';
+        return null;
+    }
+    
+    return response;
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', function() {
+    checkAuthenticationStatus();
+});
+
+// Authentication functions
+async function checkAuthenticationStatus() {
+    try {
+        const response = await fetch(`${API_BASE}/current-user`, {
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            currentUser = await response.json();
+            initializeApp();
+        } else {
+            // User not authenticated, redirect to login
+            window.location.href = '/api/login';
+        }
+    } catch (error) {
+        console.error('Authentication check failed:', error);
+        window.location.href = '/api/login';
+    }
+}
+
+async function logout() {
+    try {
+        const response = await fetch(`${API_BASE}/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        if (response.ok) {
+            window.location.href = '/api/login';
+        } else {
+            console.error('Logout failed');
+        }
+    } catch (error) {
+        console.error('Logout error:', error);
+    }
+}
+
+function initializeApp() {
     loadDashboard();
     setupEventListeners();
-});
+    updateUserInterface();
+}
+
+function updateUserInterface() {
+    // Add logout button to the interface
+    const navbar = document.querySelector('.navbar-nav');
+    if (navbar && !document.getElementById('logout-btn')) {
+        const logoutItem = document.createElement('li');
+        logoutItem.className = 'nav-item ms-auto';
+        logoutItem.innerHTML = `
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3">Welcome, ${currentUser.username}</span>
+                <button id="logout-btn" class="btn btn-outline-light btn-sm" onclick="logout()">
+                    <i class="fas fa-sign-out-alt me-1"></i>Logout
+                </button>
+            </div>
+        `;
+        navbar.appendChild(logoutItem);
+    }
+}
 
 // Setup event listeners
 function setupEventListeners() {
@@ -85,20 +167,26 @@ function showSection(sectionName) {
 async function loadDashboard() {
     try {
         // Load dashboard stats
-        const response = await fetch(`${API_BASE}/reports/dashboard`);
+        const response = await authenticatedFetch(`${API_BASE}/reports/dashboard`);
+        if (!response) return;
+        
         const stats = await response.json();
         
         displayDashboardStats(stats);
         
         // Load today's appointments
         const today = new Date().toISOString().split('T')[0];
-        const todayResponse = await fetch(`${API_BASE}/appointments?date=${today}`);
+        const todayResponse = await authenticatedFetch(`${API_BASE}/appointments?date=${today}`);
+        if (!todayResponse) return;
+        
         const todayAppointments = await todayResponse.json();
         
         displayTodayAppointments(todayAppointments);
         
         // Load upcoming appointments
-        const upcomingResponse = await fetch(`${API_BASE}/appointments/upcoming`);
+        const upcomingResponse = await authenticatedFetch(`${API_BASE}/appointments/upcoming`);
+        if (!upcomingResponse) return;
+        
         const upcomingAppointments = await upcomingResponse.json();
         
         displayUpcomingAppointments(upcomingAppointments);
@@ -912,5 +1000,6 @@ function showReportsWithData() {
         </div>
     `;
 }
+
 
 
