@@ -1,5 +1,3 @@
-// Dental Office Management System JavaScript
-
 // Global variables
 let currentSection = 'dashboard';
 let patients = [];
@@ -80,43 +78,135 @@ function initializeApp() {
 }
 
 function updateUserInterface() {
-    // Add logout button to the interface
-    const navbar = document.querySelector('.navbar-nav');
-    if (navbar && !document.getElementById('logout-btn')) {
-        const logoutItem = document.createElement('li');
-        logoutItem.className = 'nav-item ms-auto';
-        logoutItem.innerHTML = `
-            <div class="d-flex align-items-center">
-                <span class="text-light me-3">Welcome, ${currentUser.username}</span>
-                <button id="logout-btn" class="btn btn-outline-light btn-sm" onclick="logout()">
-                    <i class="fas fa-sign-out-alt me-1"></i>Logout
-                </button>
-            </div>
+    // Update user info section in the header
+    const userInfoSection = document.getElementById('user-info-section');
+    if (userInfoSection && currentUser) {
+        userInfoSection.innerHTML = `
+            <span class="text-light me-3">Welcome, ${currentUser.username}</span>
+            <button id="logout-btn" class="btn btn-outline-light btn-sm" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-1"></i>Logout
+            </button>
         `;
-        navbar.appendChild(logoutItem);
     }
 }
 
 // Setup event listeners
 function setupEventListeners() {
-    // Patient search
-    document.getElementById('patient-search').addEventListener('input', function() {
-        const query = this.value.trim();
-        if (query.length > 2) {
-            searchPatients(query);
-        } else if (query.length === 0) {
-            loadPatients();
-        }
-    });
+    // Patient search in patients section
+    const patientSearchInput = document.getElementById('patient-search');
+    if (patientSearchInput) {
+        patientSearchInput.addEventListener('input', function() {
+            const query = this.value.trim();
+            if (query.length > 0) {
+                searchPatients(query);
+            } else {
+                renderPatientCards(patients);
+            }
+        });
+    }
+
+    // Appointment patient search
+    const appointmentPatientSearch = document.getElementById('appointment-patient-search');
+    if (appointmentPatientSearch) {
+        appointmentPatientSearch.addEventListener('input', function() {
+            const query = this.value.trim();
+            if (query.length > 0) {
+                searchPatientsForAppointment(query);
+            } else {
+                hidePatientSearchDropdown();
+            }
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!appointmentPatientSearch.contains(e.target) && 
+                !document.getElementById('patient-search-dropdown').contains(e.target)) {
+                hidePatientSearchDropdown();
+            }
+        });
+    }
 
     // Appointment filters
-    document.getElementById('appointment-date-filter').addEventListener('change', loadAppointments);
-    document.getElementById('appointment-status-filter').addEventListener('change', loadAppointments);
+    const dateFilter = document.getElementById('appointment-date-filter');
+    const statusFilter = document.getElementById('appointment-status-filter');
+    if (dateFilter) dateFilter.addEventListener('change', loadAppointments);
+    if (statusFilter) statusFilter.addEventListener('change', loadAppointments);
 
-    // Ensure datetime-local input type for appointment date
-    const appointmentDateInput = document.getElementById('appointment-date');
-    if (appointmentDateInput) {
-        appointmentDateInput.type = 'datetime-local';
+    // Date picker improvements - auto-hide behavior
+    setupDatePickerBehavior();
+}
+
+function setupDatePickerBehavior() {
+    // Add event listeners to all date inputs for improved UX
+    document.querySelectorAll('.appointment-date-input').forEach(input => {
+        input.addEventListener('focus', function() {
+            // Show calendar on focus (native behavior)
+            this.showPicker && this.showPicker();
+        });
+        
+        input.addEventListener('change', function() {
+            // Auto-hide calendar on selection (native behavior handles this)
+            this.blur();
+        });
+    });
+}
+
+// Enhanced patient search for appointment form
+async function searchPatientsForAppointment(query) {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/patients`);
+        if (response && response.ok) {
+            const allPatients = await response.json();
+            const filteredPatients = allPatients.filter(patient => 
+                patient.first_name.toLowerCase().includes(query.toLowerCase()) ||
+                patient.last_name.toLowerCase().includes(query.toLowerCase()) ||
+                patient.phone.includes(query)
+            );
+            
+            showPatientSearchDropdown(filteredPatients);
+        }
+    } catch (error) {
+        console.error('Error searching patients:', error);
+    }
+}
+
+function showPatientSearchDropdown(patients) {
+    const dropdown = document.getElementById('patient-search-dropdown');
+    if (!dropdown) return;
+
+    if (patients.length === 0) {
+        dropdown.innerHTML = '<div class="dropdown-item text-muted">No patients found</div>';
+        dropdown.style.display = 'block';
+        return;
+    }
+
+    dropdown.innerHTML = patients.map(patient => `
+        <div class="dropdown-item patient-search-item" onclick="selectPatientForAppointment(${patient.id}, '${patient.first_name} ${patient.last_name}')">
+            <div class="d-flex align-items-center">
+                <div class="patient-avatar-small me-2">
+                    ${getPatientInitials(patient.first_name, patient.last_name)}
+                </div>
+                <div>
+                    <div class="fw-bold">${patient.first_name} ${patient.last_name}</div>
+                    <small class="text-muted"><i class="fas fa-phone me-1"></i>${patient.phone}</small>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    dropdown.style.display = 'block';
+}
+
+function selectPatientForAppointment(patientId, patientName) {
+    document.getElementById('appointment-patient-search').value = patientName;
+    document.getElementById('appointment-patient').value = patientId;
+    hidePatientSearchDropdown();
+}
+
+function hidePatientSearchDropdown() {
+    const dropdown = document.getElementById('patient-search-dropdown');
+    if (dropdown) {
+        dropdown.style.display = 'none';
     }
 }
 
@@ -133,10 +223,12 @@ function showSection(sectionName) {
     });
 
     // Show selected section
-    document.getElementById(sectionName + '-section').style.display = 'block';
+    const sectionElement = document.getElementById(sectionName + '-section');
+    if (sectionElement) {
+        sectionElement.style.display = 'block';
+    }
 
     // Add active class to clicked nav link
-    // Check if event.target exists before accessing its properties
     if (event && event.target) {
         event.target.classList.add('active');
     }
@@ -159,6 +251,9 @@ function showSection(sectionName) {
             break;
         case 'reports':
             showReportsWithData();
+            break;
+        case 'users':
+            loadUsers();
             break;
     }
 }
@@ -199,6 +294,8 @@ async function loadDashboard() {
 
 function displayDashboardStats(stats) {
     const statsContainer = document.getElementById('dashboard-stats');
+    if (!statsContainer) return;
+    
     statsContainer.innerHTML = `
         <div class="col-md-3">
             <div class="stat-card">
@@ -229,6 +326,7 @@ function displayDashboardStats(stats) {
 
 function displayTodayAppointments(appointments) {
     const container = document.getElementById('today-appointments');
+    if (!container) return;
     
     if (appointments.length === 0) {
         container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><p>No appointments today</p></div>';
@@ -246,6 +344,7 @@ function displayTodayAppointments(appointments) {
 
 function displayUpcomingAppointments(appointments) {
     const container = document.getElementById('upcoming-appointments');
+    if (!container) return;
     
     if (appointments.length === 0) {
         container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-plus"></i><p>No upcoming appointments</p></div>';
@@ -261,53 +360,123 @@ function displayUpcomingAppointments(appointments) {
     `).join('');
 }
 
-// Patient functions
+// Enhanced Patient functions
 async function loadPatients() {
     try {
-        const response = await fetch(`${API_BASE}/patients`);
-        patients = await response.json();
-        displayPatients(patients);
+        const response = await authenticatedFetch(`${API_BASE}/patients`);
+        if (response && response.ok) {
+            patients = await response.json();
+            renderPatientCards(patients);
+        }
     } catch (error) {
         console.error('Error loading patients:', error);
         showError('Failed to load patients');
     }
 }
 
-async function searchPatients(query) {
-    try {
-        const response = await fetch(`${API_BASE}/patients/search?q=${encodeURIComponent(query)}`);
-        const searchResults = await response.json();
-        displayPatients(searchResults);
-    } catch (error) {
-        console.error('Error searching patients:', error);
-        showError('Failed to search patients');
-    }
-}
-
-function displayPatients(patientList) {
-    const tbody = document.querySelector('#patients-table tbody');
+function renderPatientCards(patientList = patients) {
+    const container = document.getElementById('patients-container');
+    if (!container) return;
     
     if (patientList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No patients found</td></tr>';
+        container.innerHTML = `
+            <div class="col-12">
+                <div class="empty-state">
+                    <i class="fas fa-user-friends"></i>
+                    <h4>No Patients Found</h4>
+                    <p>Start by adding your first patient to the system.</p>
+                </div>
+            </div>
+        `;
         return;
     }
     
-    tbody.innerHTML = patientList.map(patient => `
-        <tr>
-            <td>${patient.first_name} ${patient.last_name}</td>
-            <td>${patient.email}</td>
-            <td>${patient.phone}</td>
-            <td>${patient.insurance_provider || 'None'}</td>
-            <td>
-                <button class="btn btn-sm btn-outline-primary me-1" onclick="editPatient(${patient.id})">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deletePatient(${patient.id})">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        </tr>
+    container.innerHTML = patientList.map(patient => `
+        <div class="col-md-6 col-lg-4 col-xl-3 mb-3">
+            <div class="patient-card" onclick="selectPatient(${patient.id})">
+                <div class="d-flex align-items-center">
+                    <div class="patient-avatar me-3">
+                        ${getPatientInitials(patient.first_name, patient.last_name)}
+                    </div>
+                    <div class="patient-info flex-grow-1">
+                        <h6 class="mb-1"><strong>${patient.first_name} ${patient.last_name}</strong></h6>
+                        <p class="mb-1 text-muted small"><i class="fas fa-phone me-1"></i>${patient.phone}</p>
+                        <p class="mb-0 text-muted small"><i class="fas fa-envelope me-1"></i>${patient.email}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     `).join('');
+}
+
+function searchPatients(query) {
+    const filteredPatients = patients.filter(patient => 
+        patient.first_name.toLowerCase().includes(query.toLowerCase()) ||
+        patient.last_name.toLowerCase().includes(query.toLowerCase()) ||
+        patient.phone.includes(query) ||
+        patient.email.toLowerCase().includes(query.toLowerCase())
+    );
+    renderPatientCards(filteredPatients);
+}
+
+function getPatientInitials(firstName, lastName) {
+    return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
+}
+
+async function selectPatient(patientId) {
+    try {
+        // Load patient details
+        const response = await authenticatedFetch(`${API_BASE}/patients/${patientId}`);
+        if (response && response.ok) {
+            const patient = await response.json();
+            showPatientDetails(patient);
+        }
+    } catch (error) {
+        console.error('Error loading patient details:', error);
+        showError('Failed to load patient details');
+    }
+}
+
+async function showPatientDetails(patient) {
+    // Load patient's past appointments
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/appointments?patient_id=${patient.id}`);
+        let pastAppointments = [];
+        if (response && response.ok) {
+            const allAppointments = await response.json();
+            pastAppointments = allAppointments.filter(apt => new Date(apt.appointment_date) < new Date());
+        }
+        
+        // Update the existing patient detail modal
+        document.getElementById('patient-name-display').innerHTML = `<strong>${patient.first_name} ${patient.last_name}</strong>`;
+        document.getElementById('patient-phone-display').textContent = patient.phone;
+        document.getElementById('patient-email-display').textContent = patient.email;
+        document.getElementById('patient-address-display').textContent = patient.address || 'Not provided';
+        document.getElementById('patient-medical-history').value = patient.medical_history || '';
+        
+        // Update past appointments
+        const appointmentsTable = document.getElementById('patient-appointments-history');
+        if (pastAppointments.length > 0) {
+            appointmentsTable.innerHTML = pastAppointments.map((apt, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${formatDate(apt.appointment_date)}</td>
+                    <td>${apt.treatment_name || 'N/A'}</td>
+                    <td><span class="badge status-${apt.status}">${apt.status}</span></td>
+                </tr>
+            `).join('');
+        } else {
+            appointmentsTable.innerHTML = '<tr><td colspan="4" class="text-center">No past appointments</td></tr>';
+        }
+        
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('patientDetailModal'));
+        modal.show();
+        
+    } catch (error) {
+        console.error('Error loading patient appointments:', error);
+        showError('Failed to load patient appointments');
+    }
 }
 
 function showPatientModal(patientId = null) {
@@ -328,20 +497,25 @@ function showPatientModal(patientId = null) {
 
 async function loadPatientData(patientId) {
     try {
-        const response = await fetch(`${API_BASE}/patients/${patientId}`);
-        const patient = await response.json();
-        
-        document.getElementById('patient-id').value = patient.id;
-        document.getElementById('first-name').value = patient.first_name;
-        document.getElementById('last-name').value = patient.last_name;
-        document.getElementById('email').value = patient.email;
-        document.getElementById('phone').value = patient.phone;
-        document.getElementById('date-of-birth').value = patient.date_of_birth || '';
-        document.getElementById('address').value = patient.address || '';
-        document.getElementById('medical-history').value = patient.medical_history || '';
-        document.getElementById('insurance-provider').value = patient.insurance_provider || '';
-        document.getElementById('emergency-contact-name').value = patient.emergency_contact_name || '';
-        document.getElementById('emergency-contact-phone').value = patient.emergency_contact_phone || '';
+        const response = await authenticatedFetch(`${API_BASE}/patients/${patientId}`);
+        if (response && response.ok) {
+            const patient = await response.json();
+            
+            document.getElementById('patient-id').value = patient.id;
+            document.getElementById('first-name').value = patient.first_name;
+            document.getElementById('last-name').value = patient.last_name;
+            document.getElementById('email').value = patient.email;
+            document.getElementById('phone').value = patient.phone;
+            document.getElementById('date-of-birth').value = patient.date_of_birth || '';
+            document.getElementById('address').value = patient.address || '';
+            document.getElementById('medical-history').value = patient.medical_history || '';
+            
+            // Set notes if the field exists
+            const notesField = document.getElementById('patient-notes');
+            if (notesField) {
+                notesField.value = patient.notes || '';
+            }
+        }
     } catch (error) {
         console.error('Error loading patient data:', error);
         showError('Failed to load patient data');
@@ -357,29 +531,30 @@ async function savePatient() {
         phone: document.getElementById('phone').value,
         date_of_birth: document.getElementById('date-of-birth').value || null,
         address: document.getElementById('address').value || null,
-        medical_history: document.getElementById('medical-history').value || null,
-        insurance_provider: document.getElementById('insurance-provider').value || null,
-        emergency_contact_name: document.getElementById('emergency-contact-name').value || null,
-        emergency_contact_phone: document.getElementById('emergency-contact-phone').value || null
+        medical_history: document.getElementById('medical-history').value || null
     };
+    
+    // Add notes if the field exists
+    const notesField = document.getElementById('patient-notes');
+    if (notesField) {
+        patientData.notes = notesField.value || null;
+    }
     
     try {
         let response;
         if (patientId) {
-            response = await fetch(`${API_BASE}/patients/${patientId}`, {
+            response = await authenticatedFetch(`${API_BASE}/patients/${patientId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(patientData)
             });
         } else {
-            response = await fetch(`${API_BASE}/patients`, {
+            response = await authenticatedFetch(`${API_BASE}/patients`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(patientData)
             });
         }
         
-        if (response.ok) {
+        if (response && response.ok) {
             bootstrap.Modal.getInstance(document.getElementById('patientModal')).hide();
             loadPatients();
             showSuccess(patientId ? 'Patient updated successfully' : 'Patient added successfully');
@@ -393,29 +568,14 @@ async function savePatient() {
     }
 }
 
-function editPatient(patientId) {
-    showPatientModal(patientId);
-}
-
-async function deletePatient(patientId) {
-    if (!confirm('Are you sure you want to delete this patient? This will also delete all their appointments.')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`${API_BASE}/patients/${patientId}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            loadPatients();
-            showSuccess('Patient deleted successfully');
-        } else {
-            showError('Failed to delete patient');
-        }
-    } catch (error) {
-        console.error('Error deleting patient:', error);
-        showError('Failed to delete patient');
+function editPatient() {
+    // Get patient ID from the detail modal and open edit modal
+    const patientName = document.getElementById('patient-name-display').textContent;
+    // Find patient by name (this is a simplified approach)
+    const patient = patients.find(p => `${p.first_name} ${p.last_name}` === patientName);
+    if (patient) {
+        bootstrap.Modal.getInstance(document.getElementById('patientDetailModal')).hide();
+        showPatientModal(patient.id);
     }
 }
 
@@ -435,9 +595,11 @@ async function loadAppointments() {
             url += '?' + params.toString();
         }
         
-        const response = await fetch(url);
-        appointments = await response.json();
-        displayAppointments(appointments);
+        const response = await authenticatedFetch(url);
+        if (response && response.ok) {
+            appointments = await response.json();
+            displayAppointments(appointments);
+        }
     } catch (error) {
         console.error('Error loading appointments:', error);
         showError('Failed to load appointments');
@@ -446,6 +608,7 @@ async function loadAppointments() {
 
 function displayAppointments(appointmentList) {
     const tbody = document.querySelector('#appointments-table tbody');
+    if (!tbody) return;
     
     if (appointmentList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">No appointments found</td></tr>';
@@ -458,7 +621,7 @@ function displayAppointments(appointmentList) {
             <td>${appointment.patient_name}</td>
             <td>${appointment.treatment_type}</td>
             <td>${appointment.duration_minutes} min</td>
-            <td><span class="badge status-${appointment.status}">${appointment.status.replace('_', ' ')}</span></td>
+            <td><span class="badge status-${appointment.status}">${appointment.status}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="editAppointment(${appointment.id})">
                     <i class="fas fa-edit"></i>
@@ -471,14 +634,12 @@ function displayAppointments(appointmentList) {
     `).join('');
 }
 
-async function showAppointmentModal(appointmentId = null) {
-    const modalElement = document.getElementById('appointmentModal');
-    const modal = new bootstrap.Modal(modalElement);
+function showAppointmentModal(appointmentId = null) {
+    const modal = new bootstrap.Modal(document.getElementById('appointmentModal'));
     const title = document.getElementById('appointmentModalTitle');
     
     // Load patients and treatments for dropdowns
-    await loadPatientsForDropdown();
-    await loadTreatmentsForDropdown();
+    loadTreatmentsForDropdown();
     
     if (appointmentId) {
         title.textContent = 'Edit Appointment';
@@ -489,49 +650,35 @@ async function showAppointmentModal(appointmentId = null) {
         document.getElementById('appointment-id').value = '';
         document.getElementById('appointment-duration').value = '60';
         document.getElementById('appointment-status').value = 'scheduled';
+        
+        // Clear patient search
+        document.getElementById('appointment-patient-search').value = '';
+        document.getElementById('appointment-patient').value = '';
     }
     
     modal.show();
-
-    // Add event listener to hide the modal when the date input changes
-    const appointmentDateInput = document.getElementById('appointment-date');
-    if (appointmentDateInput) {
-        appointmentDateInput.addEventListener('change', function() {
-            // This will trigger when a date is selected from the native datetime-local picker
-            // No explicit hide needed for native pickers, but if a custom one was used, this would be the place
-        });
-    }
-}
-
-async function loadPatientsForDropdown() {
-    try {
-        const response = await fetch(`${API_BASE}/patients`);
-        const patients = await response.json();
-        
-        const select = document.getElementById('appointment-patient');
-        select.innerHTML = '<option value="">Select a patient...</option>' +
-            patients.map(patient => `<option value="${patient.id}">${patient.first_name} ${patient.last_name}</option>`).join('');
-    } catch (error) {
-        console.error('Error loading patients for dropdown:', error);
-    }
 }
 
 async function loadTreatmentsForDropdown() {
     try {
-        const response = await fetch(`${API_BASE}/treatments?active_only=true`);
-        const treatments = await response.json();
-        
-        const select = document.getElementById('appointment-treatment');
-        select.innerHTML = '<option value="">Select a treatment...</option>' +
-            treatments.map(treatment => `<option value="${treatment.name}" data-duration="${treatment.duration_minutes}">${treatment.name}</option>`).join('');
-        
-        // Update duration when treatment is selected
-        select.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            if (selectedOption.dataset.duration) {
-                document.getElementById('appointment-duration').value = selectedOption.dataset.duration;
+        const response = await authenticatedFetch(`${API_BASE}/treatments?active_only=true`);
+        if (response && response.ok) {
+            const treatments = await response.json();
+            
+            const select = document.getElementById('appointment-treatment');
+            if (select) {
+                select.innerHTML = '<option value="">Select a treatment...</option>' +
+                    treatments.map(treatment => `<option value="${treatment.name}" data-duration="${treatment.duration_minutes}">${treatment.name}</option>`).join('');
+                
+                // Update duration when treatment is selected
+                select.addEventListener('change', function() {
+                    const selectedOption = this.options[this.selectedIndex];
+                    if (selectedOption.dataset.duration) {
+                        document.getElementById('appointment-duration').value = selectedOption.dataset.duration;
+                    }
+                });
             }
-        });
+        }
     } catch (error) {
         console.error('Error loading treatments for dropdown:', error);
     }
@@ -539,16 +686,19 @@ async function loadTreatmentsForDropdown() {
 
 async function loadAppointmentData(appointmentId) {
     try {
-        const response = await fetch(`${API_BASE}/appointments/${appointmentId}`);
-        const appointment = await response.json();
-        
-        document.getElementById('appointment-id').value = appointment.id;
-        document.getElementById('appointment-patient').value = appointment.patient_id;
-        document.getElementById('appointment-date').value = appointment.appointment_date.slice(0, 16);
-        document.getElementById('appointment-treatment').value = appointment.treatment_type;
-        document.getElementById('appointment-duration').value = appointment.duration_minutes;
-        document.getElementById('appointment-notes').value = appointment.notes || '';
-        document.getElementById('appointment-status').value = appointment.status;
+        const response = await authenticatedFetch(`${API_BASE}/appointments/${appointmentId}`);
+        if (response && response.ok) {
+            const appointment = await response.json();
+            
+            document.getElementById('appointment-id').value = appointment.id;
+            document.getElementById('appointment-patient').value = appointment.patient_id;
+            document.getElementById('appointment-patient-search').value = appointment.patient_name || '';
+            document.getElementById('appointment-date').value = appointment.appointment_date.slice(0, 16);
+            document.getElementById('appointment-treatment').value = appointment.treatment_type;
+            document.getElementById('appointment-duration').value = appointment.duration_minutes;
+            document.getElementById('appointment-notes').value = appointment.notes || '';
+            document.getElementById('appointment-status').value = appointment.status;
+        }
     } catch (error) {
         console.error('Error loading appointment data:', error);
         showError('Failed to load appointment data');
@@ -557,8 +707,15 @@ async function loadAppointmentData(appointmentId) {
 
 async function saveAppointment() {
     const appointmentId = document.getElementById('appointment-id').value;
+    const patientId = document.getElementById('appointment-patient').value;
+    
+    if (!patientId) {
+        showError('Please select a patient');
+        return;
+    }
+    
     const appointmentData = {
-        patient_id: parseInt(document.getElementById('appointment-patient').value),
+        patient_id: parseInt(patientId),
         appointment_date: document.getElementById('appointment-date').value,
         treatment_type: document.getElementById('appointment-treatment').value,
         duration_minutes: parseInt(document.getElementById('appointment-duration').value),
@@ -569,21 +726,19 @@ async function saveAppointment() {
     try {
         let response;
         if (appointmentId) {
-            response = await fetch(`${API_BASE}/appointments/${appointmentId}`, {
+            response = await authenticatedFetch(`${API_BASE}/appointments/${appointmentId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(appointmentData)
             });
         } else {
-            response = await fetch(`${API_BASE}/appointments`, {
+            response = await authenticatedFetch(`${API_BASE}/appointments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(appointmentData)
             });
         }
         
-        if (response.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('appointmentModal')).hide(); // Hide modal on success
+        if (response && response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('appointmentModal')).hide();
             loadAppointments();
             showSuccess(appointmentId ? 'Appointment updated successfully' : 'Appointment scheduled successfully');
         } else {
@@ -606,11 +761,11 @@ async function deleteAppointment(appointmentId) {
     }
     
     try {
-        const response = await fetch(`${API_BASE}/appointments/${appointmentId}`, {
+        const response = await authenticatedFetch(`${API_BASE}/appointments/${appointmentId}`, {
             method: 'DELETE'
         });
         
-        if (response.ok) {
+        if (response && response.ok) {
             loadAppointments();
             showSuccess('Appointment deleted successfully');
         } else {
@@ -625,9 +780,11 @@ async function deleteAppointment(appointmentId) {
 // Treatment functions
 async function loadTreatments() {
     try {
-        const response = await fetch(`${API_BASE}/treatments`);
-        treatments = await response.json();
-        displayTreatments(treatments);
+        const response = await authenticatedFetch(`${API_BASE}/treatments`);
+        if (response && response.ok) {
+            treatments = await response.json();
+            displayTreatments(treatments);
+        }
     } catch (error) {
         console.error('Error loading treatments:', error);
         showError('Failed to load treatments');
@@ -636,6 +793,7 @@ async function loadTreatments() {
 
 function displayTreatments(treatmentList) {
     const tbody = document.querySelector('#treatments-table tbody');
+    if (!tbody) return;
     
     if (treatmentList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="text-center">No treatments found</td></tr>';
@@ -681,15 +839,17 @@ function showTreatmentModal(treatmentId = null) {
 
 async function loadTreatmentData(treatmentId) {
     try {
-        const response = await fetch(`${API_BASE}/treatments/${treatmentId}`);
-        const treatment = await response.json();
-        
-        document.getElementById('treatment-id').value = treatment.id;
-        document.getElementById('treatment-name').value = treatment.name;
-        document.getElementById('treatment-description').value = treatment.description || '';
-        document.getElementById('treatment-duration').value = treatment.duration_minutes;
-        document.getElementById('treatment-price').value = treatment.price || '';
-        document.getElementById('treatment-active').checked = treatment.is_active;
+        const response = await authenticatedFetch(`${API_BASE}/treatments/${treatmentId}`);
+        if (response && response.ok) {
+            const treatment = await response.json();
+            
+            document.getElementById('treatment-id').value = treatment.id;
+            document.getElementById('treatment-name').value = treatment.name;
+            document.getElementById('treatment-description').value = treatment.description || '';
+            document.getElementById('treatment-duration').value = treatment.duration_minutes;
+            document.getElementById('treatment-price').value = treatment.price || '';
+            document.getElementById('treatment-active').checked = treatment.is_active;
+        }
     } catch (error) {
         console.error('Error loading treatment data:', error);
         showError('Failed to load treatment data');
@@ -709,20 +869,18 @@ async function saveTreatment() {
     try {
         let response;
         if (treatmentId) {
-            response = await fetch(`${API_BASE}/treatments/${treatmentId}`, {
+            response = await authenticatedFetch(`${API_BASE}/treatments/${treatmentId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(treatmentData)
             });
         } else {
-            response = await fetch(`${API_BASE}/treatments`, {
+            response = await authenticatedFetch(`${API_BASE}/treatments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(treatmentData)
             });
         }
         
-        if (response.ok) {
+        if (response && response.ok) {
             bootstrap.Modal.getInstance(document.getElementById('treatmentModal')).hide();
             loadTreatments();
             showSuccess(treatmentId ? 'Treatment updated successfully' : 'Treatment added successfully');
@@ -733,6 +891,185 @@ async function saveTreatment() {
     } catch (error) {
         console.error('Error saving treatment:', error);
         showError('Failed to save treatment');
+    }
+}
+
+function editTreatment(treatmentId) {
+    showTreatmentModal(treatmentId);
+}
+
+async function deleteTreatment(treatmentId) {
+    if (!confirm('Are you sure you want to delete this treatment?')) {
+        return;
+    }
+
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/treatments/${treatmentId}`, {
+            method: 'DELETE'
+        });
+
+        if (response && response.ok) {
+            loadTreatments();
+            showSuccess('Treatment deleted successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to delete treatment');
+        }
+    } catch (error) {
+        console.error('Error deleting treatment:', error);
+        showError('Failed to delete treatment');
+    }
+}
+
+// User Management functions
+async function loadUsers() {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/users`);
+        if (response && response.ok) {
+            const users = await response.json();
+            displayUsers(users);
+        }
+    } catch (error) {
+        console.error('Error loading users:', error);
+        showError('Failed to load users');
+    }
+}
+
+function displayUsers(users) {
+    const tbody = document.querySelector('#users-table tbody');
+    if (!tbody) return;
+    
+    if (users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No users found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = users.map(user => `
+        <tr>
+            <td>${user.username}</td>
+            <td>${user.email}</td>
+            <td>${formatDate(user.created_at)}</td>
+            <td>${user.last_login ? formatDate(user.last_login) : 'Never'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${user.id})">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showAddUserModal() {
+    const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+    document.getElementById('addUserForm').reset();
+    modal.show();
+}
+
+async function saveNewUser() {
+    const username = document.getElementById('new-username').value;
+    const email = document.getElementById('new-email').value;
+    const password = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    if (password !== confirmPassword) {
+        showError('Passwords do not match');
+        return;
+    }
+    
+    const userData = {
+        username: username,
+        email: email,
+        password: password
+    };
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/users`, {
+            method: 'POST',
+            body: JSON.stringify(userData)
+        });
+        
+        if (response && response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+            loadUsers();
+            showSuccess('User added successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to add user');
+        }
+    } catch (error) {
+        console.error('Error adding user:', error);
+        showError('Failed to add user');
+    }
+}
+
+function showChangePasswordModal() {
+    const modal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
+    document.getElementById('changePasswordForm').reset();
+    modal.show();
+}
+
+async function savePasswordChange() {
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password-change').value;
+    const confirmNewPassword = document.getElementById('confirm-new-password').value;
+    
+    if (newPassword !== confirmNewPassword) {
+        showError('New passwords do not match');
+        return;
+    }
+    
+    const passwordData = {
+        current_password: currentPassword,
+        new_password: newPassword
+    };
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/change-password`, {
+            method: 'POST',
+            body: JSON.stringify(passwordData)
+        });
+        
+        if (response && response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+            showSuccess('Password changed successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to change password');
+        }
+    } catch (error) {
+        console.error('Error changing password:', error);
+        showError('Failed to change password');
+    }
+}
+
+async function editUser(userId) {
+    // Implementation for editing user details
+    showError('Edit user functionality not yet implemented');
+}
+
+async function deleteUser(userId) {
+    if (!confirm('Are you sure you want to delete this user?')) {
+        return;
+    }
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/users/${userId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response && response.ok) {
+            loadUsers();
+            showSuccess('User deleted successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to delete user');
+        }
+    } catch (error) {
+        console.error('Error deleting user:', error);
+        showError('Failed to delete user');
     }
 }
 
@@ -747,45 +1084,49 @@ async function generateReports() {
     }
     
     try {
-        const [appointmentResponse, patientResponse, revenueResponse] = await Promise.all([
-            fetch(`${API_BASE}/reports/appointments?start_date=${startDate}&end_date=${endDate}`),
-            fetch(`${API_BASE}/reports/patients`),
-            fetch(`${API_BASE}/reports/revenue?start_date=${startDate}&end_date=${endDate}`)
-        ]);
+        // Load appointment reports
+        const appointmentResponse = await authenticatedFetch(`${API_BASE}/reports/appointments?start_date=${startDate}&end_date=${endDate}`);
+        if (!appointmentResponse) return;
         
         const appointmentData = await appointmentResponse.json();
-        const patientData = await patientResponse.json();
+        
+        // Load revenue reports
+        const revenueResponse = await authenticatedFetch(`${API_BASE}/reports/revenue?start_date=${startDate}&end_date=${endDate}`);
+        if (!revenueResponse) return;
+        
         const revenueData = await revenueResponse.json();
         
-        displayReports(appointmentData, patientData, revenueData);
+        displayReports(appointmentData, revenueData);
+        
     } catch (error) {
         console.error('Error generating reports:', error);
         showError('Failed to generate reports');
     }
 }
 
-function displayReports(appointmentData, patientData, revenueData) {
+function displayReports(appointmentData, revenueData) {
     const container = document.getElementById('reports-content');
+    if (!container) return;
     
     container.innerHTML = `
         <div class="row">
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Appointments by Status</h5>
+                        <h5><i class="fas fa-chart-pie me-2"></i>Appointments by Status</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="statusChart"></canvas>
+                        <canvas id="statusChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Appointments by Treatment</h5>
+                        <h5><i class="fas fa-chart-bar me-2"></i>Appointments by Treatment</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="treatmentChart"></canvas>
+                        <canvas id="treatmentChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
@@ -794,20 +1135,20 @@ function displayReports(appointmentData, patientData, revenueData) {
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Daily Appointments</h5>
+                        <h5><i class="fas fa-chart-line me-2"></i>Daily Appointments</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="dailyChart"></canvas>
+                        <canvas id="dailyChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Revenue by Treatment</h5>
+                        <h5><i class="fas fa-dollar-sign me-2"></i>Revenue by Treatment</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="revenueChart"></canvas>
+                        <canvas id="revenueChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
@@ -815,21 +1156,25 @@ function displayReports(appointmentData, patientData, revenueData) {
     `;
     
     // Create charts
-    createStatusChart(appointmentData.by_status);
-    createTreatmentChart(appointmentData.by_treatment);
-    createDailyChart(appointmentData.daily_counts);
-    createRevenueChart(revenueData.by_treatment);
+    setTimeout(() => {
+        createStatusChart(appointmentData.by_status);
+        createTreatmentChart(appointmentData.by_treatment);
+        createDailyChart(appointmentData.daily_counts);
+        createRevenueChart(revenueData.by_treatment);
+    }, 100);
 }
 
 function createStatusChart(data) {
-    const ctx = document.getElementById('statusChart').getContext('2d');
-    new Chart(ctx, {
+    const ctx = document.getElementById('statusChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
         type: 'doughnut',
         data: {
             labels: data.map(item => item.status),
             datasets: [{
                 data: data.map(item => item.count),
-                backgroundColor: ['#0d6efd', '#198754', '#dc3545', '#6c757d']
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d']
             }]
         },
         options: {
@@ -840,15 +1185,17 @@ function createStatusChart(data) {
 }
 
 function createTreatmentChart(data) {
-    const ctx = document.getElementById('treatmentChart').getContext('2d');
-    new Chart(ctx, {
+    const ctx = document.getElementById('treatmentChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
         type: 'bar',
         data: {
             labels: data.map(item => item.treatment_type),
             datasets: [{
                 label: 'Appointments',
                 data: data.map(item => item.count),
-                backgroundColor: '#0d6efd'
+                backgroundColor: '#007bff'
             }]
         },
         options: {
@@ -864,16 +1211,18 @@ function createTreatmentChart(data) {
 }
 
 function createDailyChart(data) {
-    const ctx = document.getElementById('dailyChart').getContext('2d');
-    new Chart(ctx, {
+    const ctx = document.getElementById('dailyChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
         type: 'line',
         data: {
             labels: data.map(item => item.date),
             datasets: [{
-                label: 'Appointments',
+                label: 'Daily Appointments',
                 data: data.map(item => item.count),
-                borderColor: '#0d6efd',
-                backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
                 fill: true
             }]
         },
@@ -890,8 +1239,10 @@ function createDailyChart(data) {
 }
 
 function createRevenueChart(data) {
-    const ctx = document.getElementById('revenueChart').getContext('2d');
-    new Chart(ctx, {
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
         type: 'bar',
         data: {
             labels: data.map(item => item.treatment_type),
@@ -913,77 +1264,9 @@ function createRevenueChart(data) {
     });
 }
 
-// Utility functions
-function formatDateTime(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-}
-
-function formatTime(dateString) {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
-function showSuccess(message) {
-    // You can implement a toast notification system here
-    alert(message);
-}
-
-function showError(message) {
-    // You can implement a toast notification system here
-    alert('Error: ' + message);
-}
-
-// Missing Treatment functions
-function editTreatment(treatmentId) {
-    const treatment = treatments.find(t => t.id === treatmentId);
-    if (!treatment) {
-        showError('Treatment not found');
-        return;
-    }
-
-    // Populate the form with treatment data
-    document.getElementById('treatment-id').value = treatment.id;
-    document.getElementById('treatment-name').value = treatment.name;
-    document.getElementById('treatment-description').value = treatment.description || '';
-    document.getElementById('treatment-duration').value = treatment.duration_minutes;
-    document.getElementById('treatment-price').value = treatment.price || '';
-    document.getElementById('treatment-active').checked = treatment.is_active;
-
-    // Update modal title
-    document.getElementById('treatmentModalTitle').textContent = 'Edit Treatment';
-
-    // Show the modal
-    const modal = new bootstrap.Modal(document.getElementById('treatmentModal'));
-    modal.show();
-}
-
-async function deleteTreatment(treatmentId) {
-    if (!confirm('Are you sure you want to delete this treatment?')) {
-        return;
-    }
-
-    try {
-        const response = await fetch(`${API_BASE}/treatments/${treatmentId}`, {
-            method: 'DELETE'
-        });
-
-        if (response.ok) {
-            loadTreatments();
-            showSuccess('Treatment deleted successfully');
-        } else {
-            const error = await response.json();
-            showError(error.error || 'Failed to delete treatment');
-        }
-    } catch (error) {
-        console.error('Error deleting treatment:', error);
-        showError('Failed to delete treatment');
-    }
-}
-
-// Enhanced Reports functionality
 function showReportsWithData() {
     const container = document.getElementById('reports-content');
+    if (!container) return;
     
     // Show a message if no date range is selected
     container.innerHTML = `
@@ -1001,5 +1284,29 @@ function showReportsWithData() {
     `;
 }
 
+// Utility functions
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+}
 
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+}
+
+function formatTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function showSuccess(message) {
+    // You can implement a toast notification system here
+    alert(message);
+}
+
+function showError(message) {
+    // You can implement a toast notification system here
+    alert('Error: ' + message);
+}
 

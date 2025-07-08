@@ -34,10 +34,7 @@ def create_patient():
         date_of_birth=date_of_birth,
         address=data.get('address'),
         medical_history=data.get('medical_history'),
-        insurance_provider=data.get('insurance_provider'),
-        insurance_id=data.get('insurance_id'),
-        emergency_contact_name=data.get('emergency_contact_name'),
-        emergency_contact_phone=data.get('emergency_contact_phone')
+        notes=data.get('notes')  # Added notes field
     )
     
     try:
@@ -69,10 +66,7 @@ def update_patient(patient_id):
     patient.phone = data.get('phone', patient.phone)
     patient.address = data.get('address', patient.address)
     patient.medical_history = data.get('medical_history', patient.medical_history)
-    patient.insurance_provider = data.get('insurance_provider', patient.insurance_provider)
-    patient.insurance_id = data.get('insurance_id', patient.insurance_id)
-    patient.emergency_contact_name = data.get('emergency_contact_name', patient.emergency_contact_name)
-    patient.emergency_contact_phone = data.get('emergency_contact_phone', patient.emergency_contact_phone)
+    patient.notes = data.get('notes', patient.notes)  # Added notes field
     
     # Handle date_of_birth update
     if data.get('date_of_birth'):
