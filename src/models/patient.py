@@ -10,7 +10,16 @@ class Patient(db.Model):
     date_of_birth = db.Column(db.Date, nullable=True)
     address = db.Column(db.Text, nullable=True)
     medical_history = db.Column(db.Text, nullable=True)
-    notes = db.Column(db.Text, nullable=True)  # Added notes field
+    
+    # Keep old fields for backward compatibility but make them optional
+    insurance_provider = db.Column(db.String(100), nullable=True)
+    insurance_id = db.Column(db.String(50), nullable=True)
+    emergency_contact_name = db.Column(db.String(100), nullable=True)
+    emergency_contact_phone = db.Column(db.String(20), nullable=True)
+    
+    # New field
+    notes = db.Column(db.Text, nullable=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -30,7 +39,7 @@ class Patient(db.Model):
             "date_of_birth": self.date_of_birth.isoformat() if self.date_of_birth else None,
             "address": self.address,
             "medical_history": self.medical_history,
-            "notes": self.notes,  # Added notes field
+            "notes": self.notes,  # Include notes in API response
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
