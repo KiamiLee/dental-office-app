@@ -18,6 +18,12 @@ def create_patient():
     """Create a new patient"""
     data = request.json
     
+    # BUG FIX: Validate required fields - email is now optional
+    required_fields = ['first_name', 'last_name', 'phone']
+    for field in required_fields:
+        if not data.get(field) or not data.get(field).strip():
+            return jsonify({'error': f'{field} is required'}), 400
+    
     # Convert date_of_birth string to date object if provided
     date_of_birth = None
     if data.get('date_of_birth'):
@@ -26,15 +32,20 @@ def create_patient():
         except ValueError:
             return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
     
+    # BUG FIX: Handle optional email properly
+    email = data.get('email')
+    if email and not email.strip():
+        email = None
+    
     patient = Patient(
-        first_name=data['first_name'],
-        last_name=data['last_name'],
-        email=data['email'],
-        phone=data['phone'],
+        first_name=data['first_name'].strip(),
+        last_name=data['last_name'].strip(),
+        email=email,  # Now optional
+        phone=data['phone'].strip(),
         date_of_birth=date_of_birth,
         address=data.get('address'),
         medical_history=data.get('medical_history'),
-        notes=data.get('notes')  # Handle notes field
+        notes=data.get('notes')  # Added notes field
     )
     
     try:
@@ -43,7 +54,7 @@ def create_patient():
         return jsonify(patient.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to create patient'}), 500
+        return jsonify({'error': f'Failed to create patient: {str(e)}'}), 500
 
 @patient_bp.route('/patients/<int:patient_id>', methods=['GET'])
 @login_required
@@ -60,13 +71,24 @@ def update_patient(patient_id):
     data = request.json
     
     # Update fields
-    patient.first_name = data.get('first_name', patient.first_name)
-    patient.last_name = data.get('last_name', patient.last_name)
-    patient.email = data.get('email', patient.email)
-    patient.phone = data.get('phone', patient.phone)
+    if data.get('first_name'):
+        patient.first_name = data['first_name'].strip()
+    if data.get('last_name'):
+        patient.last_name = data['last_name'].strip()
+    if data.get('phone'):
+        patient.phone = data['phone'].strip()
+    
+    # Handle optional email
+    if 'email' in data:
+        email = data.get('email')
+        if email and email.strip():
+            patient.email = email.strip()
+        else:
+            patient.email = None
+    
     patient.address = data.get('address', patient.address)
     patient.medical_history = data.get('medical_history', patient.medical_history)
-    patient.notes = data.get('notes', patient.notes)  # Handle notes field
+    patient.notes = data.get('notes', patient.notes)  # Added notes field
     
     # Handle date_of_birth update
     if data.get('date_of_birth'):
@@ -80,7 +102,7 @@ def update_patient(patient_id):
         return jsonify(patient.to_dict())
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to update patient'}), 500
+        return jsonify({'error': f'Failed to update patient: {str(e)}'}), 500
 
 @patient_bp.route('/patients/<int:patient_id>', methods=['DELETE'])
 @login_required

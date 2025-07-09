@@ -12,6 +12,7 @@ appointment_bp = Blueprint('appointment', __name__)
 def get_appointments():
     date_filter = request.args.get('date')
     status_filter = request.args.get('status')
+    patient_id_filter = request.args.get('patient_id')
     
     query = Appointment.query
     
@@ -25,6 +26,9 @@ def get_appointments():
     if status_filter and status_filter != 'all':
         query = query.filter(Appointment.status == status_filter)
     
+    if patient_id_filter:
+        query = query.filter(Appointment.patient_id == patient_id_filter)
+    
     appointments = query.order_by(Appointment.appointment_date).all()
     return jsonify([appointment.to_dict() for appointment in appointments])
 
@@ -33,8 +37,8 @@ def get_appointments():
 def create_appointment():
     data = request.get_json()
     
-    # Validate required fields
-    required_fields = ['patient_id', 'appointment_date', 'treatment_type']
+    # BUG FIX: Make treatment_type optional - only patient_id and appointment_date are required
+    required_fields = ['patient_id', 'appointment_date']
     for field in required_fields:
         if not data.get(field):
             return jsonify({'error': f'{field} is required'}), 400
@@ -58,11 +62,16 @@ def create_appointment():
     if existing_appointment:
         return jsonify({'error': 'Time slot is already booked'}), 409
     
+    # BUG FIX: Handle optional treatment_id properly
+    treatment_id = data.get('treatment_id')
+    if treatment_id == '' or treatment_id == 'null':
+        treatment_id = None
+    
     appointment = Appointment(
         patient_id=data['patient_id'],
         appointment_date=appointment_date,
-        duration_minutes=data.get('duration_minutes', 60),
-        treatment_type=data['treatment_type'],
+        duration=data.get('duration', 60),  # Changed from duration_minutes to duration
+        treatment_id=treatment_id,  # Use treatment_id instead of treatment_type
         notes=data.get('notes'),
         status=data.get('status', 'scheduled')
     )
@@ -108,8 +117,15 @@ def update_appointment(appointment_id):
             return jsonify({'error': 'Invalid appointment_date format. Use ISO format'}), 400
     
     # Update other fields
-    appointment.duration_minutes = data.get('duration_minutes', appointment.duration_minutes)
-    appointment.treatment_type = data.get('treatment_type', appointment.treatment_type)
+    appointment.duration = data.get('duration', appointment.duration)
+    
+    # Handle optional treatment_id
+    if 'treatment_id' in data:
+        treatment_id = data.get('treatment_id')
+        if treatment_id == '' or treatment_id == 'null':
+            treatment_id = None
+        appointment.treatment_id = treatment_id
+    
     appointment.notes = data.get('notes', appointment.notes)
     appointment.status = data.get('status', appointment.status)
     
@@ -175,7 +191,8 @@ def check_availability():
         # Check if this slot conflicts with existing appointments
         conflict = False
         for apt in appointments:
-            if apt.appointment_date <= slot_time < apt.appointment_date + timedelta(minutes=apt.duration_minutes):
+            apt_duration = getattr(apt, 'duration', 60)  # Handle both duration and duration_minutes
+            if apt.appointment_date <= slot_time < apt.appointment_date + timedelta(minutes=apt_duration):
                 conflict = True
                 break
         
