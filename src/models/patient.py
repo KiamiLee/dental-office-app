@@ -5,21 +5,19 @@ class Patient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    email = db.Column(db.String(120), nullable=True)  # FIXED: Made nullable and removed unique constraint
     phone = db.Column(db.String(20), nullable=False)
     date_of_birth = db.Column(db.Date, nullable=True)
     address = db.Column(db.Text, nullable=True)
     medical_history = db.Column(db.Text, nullable=True)
     
-    # Keep old fields for backward compatibility but make them optional
+    # Legacy fields for backward compatibility (all nullable)
     insurance_provider = db.Column(db.String(100), nullable=True)
     insurance_id = db.Column(db.String(50), nullable=True)
     emergency_contact_name = db.Column(db.String(100), nullable=True)
     emergency_contact_phone = db.Column(db.String(20), nullable=True)
     
-    # New field
-    notes = db.Column(db.Text, nullable=True)
-    
+    notes = db.Column(db.Text, nullable=True)  # Added notes field
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -39,7 +37,11 @@ class Patient(db.Model):
             "date_of_birth": self.date_of_birth.isoformat() if self.date_of_birth else None,
             "address": self.address,
             "medical_history": self.medical_history,
-            "notes": self.notes,  # Include notes in API response
+            "insurance_provider": self.insurance_provider,
+            "insurance_id": self.insurance_id,
+            "emergency_contact_name": self.emergency_contact_name,
+            "emergency_contact_phone": self.emergency_contact_phone,
+            "notes": self.notes,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
