@@ -70,7 +70,7 @@ def create_appointment():
     appointment = Appointment(
         patient_id=data['patient_id'],
         appointment_date=appointment_date,
-        duration=data.get('duration', 60),  # Changed from duration_minutes to duration
+        duration_minutes=data.get('duration', 60),  # ← CORRECT
         treatment_id=treatment_id,  # Use treatment_id instead of treatment_type
         notes=data.get('notes'),
         status=data.get('status', 'scheduled')
