@@ -996,7 +996,7 @@ async function saveTreatment() {
     const treatmentData = {
         name: document.getElementById('treatment-name').value,
         description: document.getElementById('treatment-description').value || null,
-        duration: parseInt(document.getElementById('treatment-duration').value) || 60,
+        duration_minutes: parseInt(document.getElementById('treatment-duration').value) || 60,
         price: parseFloat(document.getElementById('treatment-price').value) || 0,
         is_active: document.getElementById('treatment-active').checked
     };
