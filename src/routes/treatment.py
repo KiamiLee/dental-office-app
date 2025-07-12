@@ -22,14 +22,10 @@ def get_treatments():
 def create_treatment():
     """Create a new treatment"""
     data = request.json
-
-    print(f"DEBUG: Received data: {data}")
-    print(f"DEBUG: duration_minutes value: {data.get('duration_minutes')}")
-
+    
     treatment = Treatment(
         name=data['name'],
         description=data.get('description'),
-        duration_minutes=data.get('duration_minutes'),
         price=data.get('price'),
         is_active=data.get('is_active', True)
     )
@@ -58,7 +54,6 @@ def update_treatment(treatment_id):
     
     treatment.name = data.get('name', treatment.name)
     treatment.description = data.get('description', treatment.description)
-    treatment.duration_minutes = data.get('duration_minutes', treatment.duration_minutes)
     treatment.price = data.get('price', treatment.price)
     treatment.is_active = data.get('is_active', treatment.is_active)
     
