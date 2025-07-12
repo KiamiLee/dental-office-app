@@ -29,7 +29,7 @@ def create_treatment():
     treatment = Treatment(
         name=data['name'],
         description=data.get('description'),
-        duration_minutes=data.get('duration_minutes', 60),
+        duration_minutes=data.get('duration_minutes'),
         price=data.get('price'),
         is_active=data.get('is_active', True)
     )
