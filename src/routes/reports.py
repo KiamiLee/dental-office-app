@@ -1,8 +1,9 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
-from src.models.appointment import Appointment, db
+from src.models.appointment import Appointment
 from src.models.patient import Patient
 from src.models.treatment import Treatment
+from src.models.base import db
 from datetime import datetime, timedelta
 from sqlalchemy import func, extract
 

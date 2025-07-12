@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_login import login_required
-from src.models.treatment import Treatment, db
+from src.models.treatment import Treatment
+from src.models.base import db
 from datetime import datetime
 
 treatment_bp = Blueprint('treatment', __name__)
