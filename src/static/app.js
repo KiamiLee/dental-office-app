@@ -766,7 +766,7 @@ function renderAppointments(appointmentList = appointments) {
             <td>${formatDateTime(appointment.appointment_date)}</td>
             <td>${appointment.patient_name}</td>
             <td>${appointment.treatment_name || 'No treatment specified'}</td>
-            <td>${appointment.duration || 60} min</td>
+            <td>${appointment.duration} min</td>
             <td><span class="badge status-${appointment.status}">${appointment.status}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="editAppointment(${appointment.id})">
@@ -826,7 +826,7 @@ async function loadAppointmentData(appointmentId) {
             document.getElementById('appointment-patient').value = appointment.patient_id;
             document.getElementById('appointment-date').value = appointment.appointment_date.slice(0, 16);
             document.getElementById('appointment-treatment').value = appointment.treatment_id || '';
-            document.getElementById('appointment-duration').value = appointment.duration || 60;
+            document.getElementById('appointment-duration').value = appointment.duration || '';
             document.getElementById('appointment-notes').value = appointment.notes || '';
             document.getElementById('appointment-status').value = appointment.status;
             
@@ -856,7 +856,7 @@ async function saveAppointment() {
         patient_id: parseInt(patientId),
         appointment_date: appointmentDate,
         treatment_id: treatmentValue ? parseInt(treatmentValue) : null, // Properly handle empty treatment
-        duration: parseInt(document.getElementById('appointment-duration').value) || 60,
+        duration: parseInt(document.getElementById('appointment-duration').value),
         notes: document.getElementById('appointment-notes').value || null,
         status: document.getElementById('appointment-status').value
     };
@@ -940,7 +940,7 @@ function renderTreatments(treatmentList = treatments) {
         <tr>
             <td>${treatment.name}</td>
             <td>${treatment.description || 'No description'}</td>
-            <td>${treatment.duration || 60}</td>
+            <td>${treatment.duration}</td>
             <td>$${treatment.price ? treatment.price.toFixed(2) : '0.00'}</td>
             <td><span class="badge ${treatment.is_active ? 'bg-success' : 'bg-secondary'}">${treatment.is_active ? 'Active' : 'Inactive'}</span></td>
             <td>
@@ -981,7 +981,7 @@ async function loadTreatmentData(treatmentId) {
             document.getElementById('treatment-id').value = treatment.id;
             document.getElementById('treatment-name').value = treatment.name;
             document.getElementById('treatment-description').value = treatment.description || '';
-            document.getElementById('treatment-duration').value = treatment.duration || 60;
+            document.getElementById('treatment-duration').value = treatment.duration || '';
             document.getElementById('treatment-price').value = treatment.price || '';
             document.getElementById('treatment-active').checked = treatment.is_active;
         }
