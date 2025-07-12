@@ -258,117 +258,245 @@ function showSection(sectionName) {
     }
 }
 
-// Dashboard functions
+// Simple and robust dashboard loading function
 async function loadDashboard() {
     try {
-        // Load dashboard stats
-        const response = await authenticatedFetch(`${API_BASE}/reports/dashboard`);
-        if (!response) return;
+        console.log('Loading dashboard...');
         
-        const stats = await response.json();
-        
-        displayDashboardStats(stats);
+        // Load basic stats first - use simple counts
+        await loadDashboardStats();
         
         // Load today's appointments
         const today = new Date().toISOString().split('T')[0];
+        console.log('Loading today appointments for:', today);
+        
         const todayResponse = await authenticatedFetch(`${API_BASE}/appointments?date=${today}`);
-        if (!todayResponse) return;
+        if (todayResponse && todayResponse.ok) {
+            const todayAppointments = await todayResponse.json();
+            console.log('Today appointments loaded:', todayAppointments);
+            displayTodayAppointments(todayAppointments);
+        } else {
+            console.error('Failed to load today appointments');
+            displayTodayAppointments([]);
+        }
         
-        const todayAppointments = await todayResponse.json();
-        
-        displayTodayAppointments(todayAppointments);
-        
-        // Load upcoming appointments - use all future appointments instead of just /upcoming endpoint
+        // Load all appointments and filter for upcoming
+        console.log('Loading all appointments...');
         const allAppointmentsResponse = await authenticatedFetch(`${API_BASE}/appointments`);
-        if (!allAppointmentsResponse) return;
-        
-        const allAppointments = await allAppointmentsResponse.json();
-        
-        displayUpcomingAppointments(allAppointments);
+        if (allAppointmentsResponse && allAppointmentsResponse.ok) {
+            const allAppointments = await allAppointmentsResponse.json();
+            console.log('All appointments loaded:', allAppointments);
+            displayUpcomingAppointments(allAppointments);
+        } else {
+            console.error('Failed to load all appointments');
+            displayUpcomingAppointments([]);
+        }
         
     } catch (error) {
         console.error('Error loading dashboard:', error);
-        showError('Failed to load dashboard data');
+        // Don't show error alert, just log it and show empty states
+        displayTodayAppointments([]);
+        displayUpcomingAppointments([]);
+        displayDashboardStats({
+            today_appointments: 0,
+            upcoming_appointments: 0,
+            total_patients: 0
+        });
     }
 }
 
+// Simple dashboard stats loading
+async function loadDashboardStats() {
+    try {
+        console.log('Loading dashboard stats...');
+        
+        // Try the dashboard endpoint first
+        const response = await authenticatedFetch(`${API_BASE}/reports/dashboard`);
+        if (response && response.ok) {
+            const stats = await response.json();
+            console.log('Dashboard stats loaded:', stats);
+            displayDashboardStats(stats);
+            return;
+        }
+        
+        console.log('Dashboard endpoint failed, calculating manually...');
+        
+        // Fallback: Calculate stats manually
+        const [patientsResponse, appointmentsResponse] = await Promise.all([
+            authenticatedFetch(`${API_BASE}/patients`),
+            authenticatedFetch(`${API_BASE}/appointments`)
+        ]);
+        
+        let totalPatients = 0;
+        let todayAppointments = 0;
+        let upcomingAppointments = 0;
+        
+        if (patientsResponse && patientsResponse.ok) {
+            const patients = await patientsResponse.json();
+            totalPatients = patients.length;
+        }
+        
+        if (appointmentsResponse && appointmentsResponse.ok) {
+            const appointments = await appointmentsResponse.json();
+            const today = new Date().toISOString().split('T')[0];
+            const now = new Date();
+            
+            todayAppointments = appointments.filter(apt => 
+                apt.appointment_date.startsWith(today)
+            ).length;
+            
+            upcomingAppointments = appointments.filter(apt => {
+                const aptDate = new Date(apt.appointment_date);
+                return aptDate > now;
+            }).length;
+        }
+        
+        const manualStats = {
+            today_appointments: todayAppointments,
+            upcoming_appointments: upcomingAppointments,
+            total_patients: totalPatients
+        };
+        
+        console.log('Manual stats calculated:', manualStats);
+        displayDashboardStats(manualStats);
+        
+    } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+        // Show default stats
+        displayDashboardStats({
+            today_appointments: 0,
+            upcoming_appointments: 0,
+            total_patients: 0
+        });
+    }
+}
+
+// Robust dashboard stats display
 function displayDashboardStats(stats) {
     const statsContainer = document.getElementById('dashboard-stats');
-    if (!statsContainer) return;
+    if (!statsContainer) {
+        console.error('dashboard-stats container not found');
+        return;
+    }
     
-    statsContainer.innerHTML = `
-        <div class="col-md-3">
-            <div class="stat-card">
-                <h3>${stats.today_appointments}</h3>
-                <p><i class="fas fa-calendar-day me-1"></i>Today's Appointments</p>
+    console.log('Displaying dashboard stats:', stats);
+    
+    try {
+        statsContainer.innerHTML = `
+            <div class="col-md-3">
+                <div class="stat-card">
+                    <h3>${stats.today_appointments || 0}</h3>
+                    <p><i class="fas fa-calendar-day me-1"></i>Today's Appointments</p>
+                </div>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card success">
-                <h3>${stats.upcoming_appointments}</h3>
-                <p><i class="fas fa-clock me-1"></i>Upcoming Appointments</p>
+            <div class="col-md-3">
+                <div class="stat-card success">
+                    <h3>${stats.upcoming_appointments || 0}</h3>
+                    <p><i class="fas fa-clock me-1"></i>Upcoming Appointments</p>
+                </div>
             </div>
-        </div>
-        <div class="col-md-3">
-            <div class="stat-card warning" onclick="showSection('patients')" style="cursor: pointer;">
-                <h3>${stats.total_patients}</h3>
-                <p><i class="fas fa-users me-1"></i>Total Patients</p>
+            <div class="col-md-3">
+                <div class="stat-card warning" onclick="showSection('patients')" style="cursor: pointer;">
+                    <h3>${stats.total_patients || 0}</h3>
+                    <p><i class="fas fa-users me-1"></i>Total Patients</p>
+                </div>
             </div>
-        </div>
-    `;
+        `;
+        
+        console.log('Dashboard stats displayed successfully');
+        
+    } catch (error) {
+        console.error('Error displaying dashboard stats:', error);
+        statsContainer.innerHTML = `
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Error loading dashboard statistics
+                </div>
+            </div>
+        `;
+    }
 }
 
+// Robust today appointments display
 function displayTodayAppointments(appointments) {
     const container = document.getElementById('today-appointments');
-    if (!container) return;
-    
-    if (appointments.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><p>No appointments today</p></div>';
+    if (!container) {
+        console.error('today-appointments container not found');
         return;
     }
     
-    container.innerHTML = appointments.map(appointment => `
-        <div class="appointment-item ${appointment.status}">
-            <div class="appointment-time">${formatTime(appointment.appointment_date)}</div>
-            <div class="appointment-patient">${appointment.patient_name}</div>
-            <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
-        </div>
-    `).join('');
+    console.log('Displaying today appointments:', appointments);
+    
+    try {
+        if (appointments.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-times"></i><p>No appointments today</p></div>';
+            return;
+        }
+        
+        container.innerHTML = appointments.map(appointment => `
+            <div class="appointment-item ${appointment.status || 'scheduled'}">
+                <div class="appointment-time">${formatTime(appointment.appointment_date)}</div>
+                <div class="appointment-patient">${appointment.patient_name || 'Unknown Patient'}</div>
+                <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
+            </div>
+        `).join('');
+        
+        console.log('Today appointments displayed successfully');
+        
+    } catch (error) {
+        console.error('Error displaying today appointments:', error);
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error loading today appointments</p></div>';
+    }
 }
 
+// Robust upcoming appointments display
 function displayUpcomingAppointments(appointments) {
     const container = document.getElementById('upcoming-appointments');
-    if (!container) return;
-    
-    console.log('All appointments received:', appointments); // Debug log
-    
-    // Get current date and time
-    const now = new Date();
-    
-    // Filter to show all future appointments (not just this week)
-    const futureAppointments = appointments.filter(appointment => {
-        const appointmentDate = new Date(appointment.appointment_date);
-        console.log('Checking appointment:', appointmentDate, 'vs now:', now); // Debug log
-        return appointmentDate > now;
-    });
-    
-    console.log('Future appointments found:', futureAppointments); // Debug log
-    
-    if (futureAppointments.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-plus"></i><p>No upcoming appointments</p></div>';
+    if (!container) {
+        console.error('upcoming-appointments container not found');
         return;
     }
     
-    // Sort by date and take first 5
-    futureAppointments.sort((a, b) => new Date(a.appointment_date) - new Date(b.appointment_date));
+    console.log('Displaying upcoming appointments:', appointments);
     
-    container.innerHTML = futureAppointments.slice(0, 5).map(appointment => `
-        <div class="appointment-item">
-            <div class="appointment-time">${formatDateTime(appointment.appointment_date)}</div>
-            <div class="appointment-patient">${appointment.patient_name}</div>
-            <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
-        </div>
-    `).join('');
+    try {
+        // Get current date and time
+        const now = new Date();
+        console.log('Current time:', now);
+        
+        // Filter to show all future appointments
+        const futureAppointments = appointments.filter(appointment => {
+            const appointmentDate = new Date(appointment.appointment_date);
+            const isFuture = appointmentDate > now;
+            console.log(`Appointment ${appointment.id}: ${appointmentDate} > ${now} = ${isFuture}`);
+            return isFuture;
+        });
+        
+        console.log('Future appointments filtered:', futureAppointments);
+        
+        if (futureAppointments.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-plus"></i><p>No upcoming appointments</p></div>';
+            return;
+        }
+        
+        // Sort by date and take first 5
+        futureAppointments.sort((a, b) => new Date(a.appointment_date) - new Date(b.appointment_date));
+        
+        container.innerHTML = futureAppointments.slice(0, 5).map(appointment => `
+            <div class="appointment-item">
+                <div class="appointment-time">${formatDateTime(appointment.appointment_date)}</div>
+                <div class="appointment-patient">${appointment.patient_name || 'Unknown Patient'}</div>
+                <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
+            </div>
+        `).join('');
+        
+        console.log('Upcoming appointments displayed successfully');
+        
+    } catch (error) {
+        console.error('Error displaying upcoming appointments:', error);
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><p>Error loading upcoming appointments</p></div>';
+    }
 }
 
 // Enhanced Patient functions
