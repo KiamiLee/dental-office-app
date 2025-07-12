@@ -1,31 +1,34 @@
 from datetime import datetime
-from src.models.base import db
+from src.models import db
 
 class Appointment(db.Model):
+    __tablename__ = 'appointments'
+    
     id = db.Column(db.Integer, primary_key=True)
-    patient_id = db.Column(db.Integer, db.ForeignKey("patient.id"), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
     appointment_date = db.Column(db.DateTime, nullable=False)
-    treatment_type = db.Column(db.String(100), nullable=True)
-    notes = db.Column(db.Text, nullable=True)
-    status = db.Column(db.String(20), default="scheduled")  # scheduled, completed, cancelled, no_show
-    reminder_sent = db.Column(db.Boolean, default=False)
+    treatment_type = db.Column(db.String(100))
+    notes = db.Column(db.Text)
+    status = db.Column(db.String(20), default='scheduled')  # scheduled, completed, cancelled, no-show
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
+    
+    # Relationship
+    patient = db.relationship('Patient', backref=db.backref('appointments', lazy=True))
+    
     def __repr__(self):
-        return f"<Appointment {self.id} - {self.treatment_type or 'No Treatment'}>"
-
+        return f'<Appointment {self.id} - {self.patient_id} on {self.appointment_date}>'
+    
     def to_dict(self):
+        """Convert appointment to dictionary"""
         return {
-            "id": self.id,
-            "patient_id": self.patient_id,
-            "patient_name": self.patient.full_name() if self.patient else None,
-            "appointment_date": self.appointment_date.isoformat() if self.appointment_date else None,
-            "treatment_type": self.treatment_type or '',
-            "notes": self.notes,
-            "status": self.status,
-            "reminder_sent": self.reminder_sent,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            'id': self.id,
+            'patient_id': self.patient_id,
+            'appointment_date': self.appointment_date.isoformat(),
+            'treatment_type': self.treatment_type,
+            'notes': self.notes,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
 
