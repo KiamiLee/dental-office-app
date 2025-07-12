@@ -37,7 +37,7 @@ def get_appointments():
 def create_appointment():
     data = request.get_json()
     
-    # BUG FIX: Make treatment_type optional - only patient_id and appointment_date are required
+    # Validate required fields
     required_fields = ['patient_id', 'appointment_date']
     for field in required_fields:
         if not data.get(field):
@@ -62,16 +62,10 @@ def create_appointment():
     if existing_appointment:
         return jsonify({'error': 'Time slot is already booked'}), 409
     
-    # BUG FIX: Handle optional treatment_id properly
-    treatment_id = data.get('treatment_id')
-    if treatment_id == '' or treatment_id == 'null':
-        treatment_id = None
-    
     appointment = Appointment(
         patient_id=data['patient_id'],
         appointment_date=appointment_date,
-        duration_minutes=data.get('duration', 60),  # ← CORRECT
-        treatment_type=treatment_id,  #CORRECT
+        treatment_type=data.get('treatment_type', ''),
         notes=data.get('notes'),
         status=data.get('status', 'scheduled')
     )
@@ -82,7 +76,7 @@ def create_appointment():
         return jsonify(appointment.to_dict()), 201
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to create appointment'}), 500
+        return jsonify({'error': f'Failed to create appointment: {str(e)}'}), 500
 
 @appointment_bp.route('/appointments/<int:appointment_id>', methods=['GET'])
 @login_required
@@ -116,25 +110,20 @@ def update_appointment(appointment_id):
         except ValueError:
             return jsonify({'error': 'Invalid appointment_date format. Use ISO format'}), 400
     
-    # Update other fields
-    appointment.duration = data.get('duration', appointment.duration)
-    
-    # Handle optional treatment_id
-    if 'treatment_id' in data:
-        treatment_id = data.get('treatment_id')
-        if treatment_id == '' or treatment_id == 'null':
-            treatment_id = None
-        appointment.treatment_id = treatment_id
-    
-    appointment.notes = data.get('notes', appointment.notes)
-    appointment.status = data.get('status', appointment.status)
+    # Update other fields (no duration handling)
+    if 'treatment_type' in data:
+        appointment.treatment_type = data['treatment_type']
+    if 'notes' in data:
+        appointment.notes = data['notes']
+    if 'status' in data:
+        appointment.status = data['status']
     
     try:
         db.session.commit()
         return jsonify(appointment.to_dict())
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Failed to update appointment'}), 500
+        return jsonify({'error': f'Failed to update appointment: {str(e)}'}), 500
 
 @appointment_bp.route('/appointments/<int:appointment_id>', methods=['DELETE'])
 @login_required
@@ -156,7 +145,7 @@ def get_upcoming_appointments():
     appointments = Appointment.query.filter(
         Appointment.appointment_date > now,
         Appointment.status == 'scheduled'
-    ).order_by(Appointment.appointment_date).limit(5).all()
+    ).order_by(Appointment.appointment_date).limit(10).all()
     
     return jsonify([appointment.to_dict() for appointment in appointments])
 
@@ -164,7 +153,6 @@ def get_upcoming_appointments():
 @login_required
 def check_availability():
     date_str = request.args.get('date')
-    duration = int(request.args.get('duration', 60))
     
     if not date_str:
         return jsonify({'error': 'Date parameter is required'}), 400
@@ -180,24 +168,24 @@ def check_availability():
         Appointment.status == 'scheduled'
     ).order_by(Appointment.appointment_date).all()
     
-    # Generate available time slots (simplified)
+    # Generate available time slots (simplified - no duration calculation)
     available_slots = []
     start_hour = 9  # 9 AM
     end_hour = 17   # 5 PM
     
     for hour in range(start_hour, end_hour):
-        slot_time = check_date.replace(hour=hour, minute=0, second=0, microsecond=0)
-        
-        # Check if this slot conflicts with existing appointments
-        conflict = False
-        for apt in appointments:
-            apt_duration = getattr(apt, 'duration', 60)  # Handle both duration and duration_minutes
-            if apt.appointment_date <= slot_time < apt.appointment_date + timedelta(minutes=apt_duration):
-                conflict = True
-                break
-        
-        if not conflict:
-            available_slots.append(slot_time.strftime('%H:%M'))
+        for minute in [0, 30]:  # 30-minute slots
+            slot_time = check_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            # Check if this slot conflicts with existing appointments
+            conflict = False
+            for apt in appointments:
+                if apt.appointment_date == slot_time:
+                    conflict = True
+                    break
+            
+            if not conflict:
+                available_slots.append(slot_time.strftime('%H:%M'))
     
     return jsonify({'available_slots': available_slots})
 
