@@ -344,9 +344,15 @@ function displayUpcomingAppointments(appointments) {
     const today = new Date();
     const nextDay = new Date(today);
     nextDay.setDate(today.getDate() + 1);
+
+
+    // Get end of current week (Sunday)
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(now.getDate() + (7 - now.getDay())); // Go to Sunday
+    endOfWeek.setHours(23, 59, 59, 999);
     
-    const endOfWeek = new Date(today);
-    endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+    //const endOfWeek = new Date(today);
+   // endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
     
     const filteredAppointments = appointments.filter(appointment => {
         const appointmentDate = new Date(appointment.appointment_date);
