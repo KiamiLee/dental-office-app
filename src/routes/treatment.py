@@ -22,7 +22,10 @@ def get_treatments():
 def create_treatment():
     """Create a new treatment"""
     data = request.json
-    
+
+    print(f"DEBUG: Received data: {data}")
+    print(f"DEBUG: duration_minutes value: {data.get('duration_minutes')}")
+
     treatment = Treatment(
         name=data['name'],
         description=data.get('description'),
