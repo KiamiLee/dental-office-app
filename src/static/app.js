@@ -258,7 +258,7 @@ function showSection(sectionName) {
     }
 }
 
-// Simple and robust dashboard loading function
+// FIXED Dashboard functions with robust error handling
 async function loadDashboard() {
     try {
         console.log('Loading dashboard...');
@@ -305,7 +305,7 @@ async function loadDashboard() {
     }
 }
 
-// Simple dashboard stats loading
+// Simple dashboard stats loading with fallback
 async function loadDashboardStats() {
     try {
         console.log('Loading dashboard stats...');
@@ -371,7 +371,6 @@ async function loadDashboardStats() {
     }
 }
 
-// Robust dashboard stats display
 function displayDashboardStats(stats) {
     const statsContainer = document.getElementById('dashboard-stats');
     if (!statsContainer) {
@@ -418,7 +417,6 @@ function displayDashboardStats(stats) {
     }
 }
 
-// Robust today appointments display
 function displayTodayAppointments(appointments) {
     const container = document.getElementById('today-appointments');
     if (!container) {
@@ -450,7 +448,6 @@ function displayTodayAppointments(appointments) {
     }
 }
 
-// Robust upcoming appointments display
 function displayUpcomingAppointments(appointments) {
     const container = document.getElementById('upcoming-appointments');
     if (!container) {
@@ -723,7 +720,7 @@ function clearPatientFilter() {
     renderPatientCards(patients);
 }
 
-// Appointment functions
+// Appointment functions (DURATION REMOVED)
 async function loadAppointments() {
     try {
         let url = `${API_BASE}/appointments`;
@@ -916,7 +913,7 @@ function clearAppointmentFilters() {
     loadAppointments();
 }
 
-// Treatment functions
+// Treatment functions (DURATION REMOVED)
 async function loadTreatments() {
     try {
         const response = await authenticatedFetch(`${API_BASE}/treatments`);
@@ -1016,6 +1013,10 @@ async function saveTreatment() {
         }
         
         if (response && response.ok) {
+            // Clear form completely before closing modal
+            document.getElementById('treatmentForm').reset();
+            document.getElementById('treatment-id').value = '';
+            
             bootstrap.Modal.getInstance(document.getElementById('treatmentModal')).hide();
             loadTreatments();
             showSuccess(treatmentId ? 'Treatment updated successfully' : 'Treatment added successfully');
@@ -1251,7 +1252,7 @@ async function deleteUser(userId) {
     }
 }
 
-// Reports functions
+// FIXED Reports functions with unified endpoint
 async function generateReports() {
     const startDate = document.getElementById('report-start-date').value;
     const endDate = document.getElementById('report-end-date').value;
@@ -1262,23 +1263,59 @@ async function generateReports() {
     }
     
     try {
-        // Use unified reports endpoint
+        console.log('Generating reports for:', startDate, 'to', endDate);
+        
+        // Use the FIXED unified reports endpoint
         const response = await authenticatedFetch(`${API_BASE}/reports?start_date=${startDate}&end_date=${endDate}`);
-        if (!response) return;
+        
+        if (!response) {
+            showError('Failed to connect to reports service');
+            return;
+        }
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            showError(errorData.error || 'Failed to generate reports');
+            return;
+        }
         
         const reportData = await response.json();
+        console.log('Reports data received:', reportData);
+        
+        // Validate data structure
+        if (!reportData.appointments || !reportData.revenue) {
+            showError('Invalid report data format received');
+            return;
+        }
         
         displayReports(reportData.appointments, reportData.revenue);
         
     } catch (error) {
         console.error('Error generating reports:', error);
-        showError('Failed to generate reports');
+        showError('Failed to generate reports: ' + error.message);
     }
 }
 
 function displayReports(appointmentData, revenueData) {
     const container = document.getElementById('reports-content');
-    if (!container) return;
+    if (!container) {
+        console.error('Reports container not found');
+        return;
+    }
+    
+    console.log('Displaying reports with data:', { appointmentData, revenueData });
+    
+    // Check if Chart.js is available
+    if (typeof Chart === 'undefined') {
+        container.innerHTML = `
+            <div class="alert alert-danger">
+                <h5><i class="fas fa-exclamation-triangle me-2"></i>Chart Library Missing</h5>
+                <p>Chart.js library is not loaded. Charts cannot be displayed.</p>
+                <p>Please ensure Chart.js is included in your HTML file.</p>
+            </div>
+        `;
+        return;
+    }
     
     container.innerHTML = `
         <div class="row">
@@ -1288,7 +1325,7 @@ function displayReports(appointmentData, revenueData) {
                         <h5><i class="fas fa-chart-pie me-2"></i>Appointments by Status</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="statusChart" height="300"></canvas>
+                        <canvas id="statusChart" width="400" height="300"></canvas>
                     </div>
                 </div>
             </div>
@@ -1298,7 +1335,7 @@ function displayReports(appointmentData, revenueData) {
                         <h5><i class="fas fa-chart-bar me-2"></i>Appointments by Treatment</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="treatmentChart" height="300"></canvas>
+                        <canvas id="treatmentChart" width="400" height="300"></canvas>
                     </div>
                 </div>
             </div>
@@ -1310,7 +1347,7 @@ function displayReports(appointmentData, revenueData) {
                         <h5><i class="fas fa-chart-line me-2"></i>Daily Appointments</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="dailyChart" height="300"></canvas>
+                        <canvas id="dailyChart" width="400" height="300"></canvas>
                     </div>
                 </div>
             </div>
@@ -1320,120 +1357,191 @@ function displayReports(appointmentData, revenueData) {
                         <h5><i class="fas fa-dollar-sign me-2"></i>Revenue by Treatment</h5>
                     </div>
                     <div class="card-body">
-                        <canvas id="revenueChart" height="300"></canvas>
+                        <canvas id="revenueChart" width="400" height="300"></canvas>
                     </div>
                 </div>
             </div>
         </div>
     `;
     
-    // Create charts
+    // Create charts with delay to ensure DOM elements exist
     setTimeout(() => {
-        createStatusChart(appointmentData.by_status);
-        createTreatmentChart(appointmentData.by_treatment);
-        createDailyChart(appointmentData.daily_counts);
-        createRevenueChart(revenueData.by_treatment);
+        try {
+            createStatusChart(appointmentData.by_status || []);
+            createTreatmentChart(appointmentData.by_treatment || []);
+            createDailyChart(appointmentData.daily_counts || []);
+            createRevenueChart(revenueData.by_treatment || []);
+        } catch (error) {
+            console.error('Error creating charts:', error);
+            container.innerHTML += `
+                <div class="alert alert-warning mt-3">
+                    <h5><i class="fas fa-exclamation-triangle me-2"></i>Chart Error</h5>
+                    <p>Some charts could not be created: ${error.message}</p>
+                </div>
+            `;
+        }
     }, 100);
 }
 
 function createStatusChart(data) {
     const ctx = document.getElementById('statusChart');
-    if (!ctx) return;
+    if (!ctx) {
+        console.error('Status chart canvas not found');
+        return;
+    }
     
-    new Chart(ctx.getContext('2d'), {
-        type: 'doughnut',
-        data: {
-            labels: data.map(item => item.status),
-            datasets: [{
-                data: data.map(item => item.count),
-                backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d']
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false
-        }
-    });
+    console.log('Creating status chart with data:', data);
+    
+    if (!data || data.length === 0) {
+        ctx.getContext('2d').fillText('No data available', 50, 50);
+        return;
+    }
+    
+    try {
+        new Chart(ctx.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: data.map(item => item.status || 'Unknown'),
+                datasets: [{
+                    data: data.map(item => item.count || 0),
+                    backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d', '#17a2b8']
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error creating status chart:', error);
+    }
 }
 
 function createTreatmentChart(data) {
     const ctx = document.getElementById('treatmentChart');
-    if (!ctx) return;
+    if (!ctx) {
+        console.error('Treatment chart canvas not found');
+        return;
+    }
     
-    new Chart(ctx.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: data.map(item => item.treatment_type),
-            datasets: [{
-                label: 'Appointments',
-                data: data.map(item => item.count),
-                backgroundColor: '#007bff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
+    console.log('Creating treatment chart with data:', data);
+    
+    if (!data || data.length === 0) {
+        ctx.getContext('2d').fillText('No data available', 50, 50);
+        return;
+    }
+    
+    try {
+        new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: data.map(item => item.treatment_type || 'No Treatment'),
+                datasets: [{
+                    label: 'Appointments',
+                    data: data.map(item => item.count || 0),
+                    backgroundColor: '#007bff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error creating treatment chart:', error);
+    }
 }
 
 function createDailyChart(data) {
     const ctx = document.getElementById('dailyChart');
-    if (!ctx) return;
+    if (!ctx) {
+        console.error('Daily chart canvas not found');
+        return;
+    }
     
-    new Chart(ctx.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: data.map(item => item.date),
-            datasets: [{
-                label: 'Daily Appointments',
-                data: data.map(item => item.count),
-                borderColor: '#28a745',
-                backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
+    console.log('Creating daily chart with data:', data);
+    
+    if (!data || data.length === 0) {
+        ctx.getContext('2d').fillText('No data available', 50, 50);
+        return;
+    }
+    
+    try {
+        new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: data.map(item => item.date || 'Unknown'),
+                datasets: [{
+                    label: 'Daily Appointments',
+                    data: data.map(item => item.count || 0),
+                    borderColor: '#28a745',
+                    backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error creating daily chart:', error);
+    }
 }
 
 function createRevenueChart(data) {
     const ctx = document.getElementById('revenueChart');
-    if (!ctx) return;
+    if (!ctx) {
+        console.error('Revenue chart canvas not found');
+        return;
+    }
     
-    new Chart(ctx.getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: data.map(item => item.treatment_type),
-            datasets: [{
-                label: 'Revenue ($)',
-                data: data.map(item => item.total_revenue),
-                backgroundColor: '#198754'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true
+    console.log('Creating revenue chart with data:', data);
+    
+    if (!data || data.length === 0) {
+        ctx.getContext('2d').fillText('No data available', 50, 50);
+        return;
+    }
+    
+    try {
+        new Chart(ctx.getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: data.map(item => item.treatment_type || 'No Treatment'),
+                datasets: [{
+                    label: 'Revenue ($)',
+                    data: data.map(item => item.total_revenue || 0),
+                    backgroundColor: '#198754'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
                 }
             }
-        }
-    });
+        });
+    } catch (error) {
+        console.error('Error creating revenue chart:', error);
+    }
 }
 
 function showReportsWithData() {
@@ -1452,6 +1560,12 @@ function showReportsWithData() {
                 <li>Daily Appointment Trends</li>
                 <li>Revenue Analysis by Treatment</li>
             </ul>
+            <div class="mt-3">
+                <small class="text-muted">
+                    <strong>Note:</strong> Charts require Chart.js library to be loaded. 
+                    If charts don't appear, please check that Chart.js is included in your HTML file.
+                </small>
+            </div>
         </div>
     `;
 }

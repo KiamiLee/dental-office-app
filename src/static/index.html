@@ -7,6 +7,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="style.css" rel="stylesheet">
+    <!-- Chart.js for reports -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -98,7 +100,7 @@
 
         <!-- Patients Section -->
         <div id="patients-section" class="section" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-users me-2"></i>Patients</h2>
                 <button class="btn btn-primary" onclick="showPatientModal()">
                     <i class="fas fa-plus me-1"></i>Add Patient
@@ -108,8 +110,7 @@
             <div class="row mb-3">
                 <div class="col-md-6">
                     <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" class="form-control" id="patient-search" placeholder="Search patients...">
+                        <input type="text" class="form-control" id="patient-search" placeholder="Search patients by name, phone, or email...">
                         <button class="btn btn-outline-secondary" type="button" onclick="clearPatientFilter()">
                             <i class="fas fa-times"></i> Clear
                         </button>
@@ -117,73 +118,14 @@
                 </div>
             </div>
             
-            <!-- Patient Cards Container -->
             <div class="row" id="patients-container">
-                <!-- Patient cards will be loaded here -->
-            </div>
-            
-            <!-- Patient Detail Modal -->
-            <div class="modal fade" id="patientDetailModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="patientDetailTitle">Patient Details</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6><strong id="patient-name-display"></strong></h6>
-                                    <div class="mb-3">
-                                        <h6>Contact Details</h6>
-                                        <p class="mb-1"><i class="fas fa-phone me-2"></i><span id="patient-phone-display"></span></p>
-                                        <p class="mb-1"><i class="fas fa-envelope me-2"></i><span id="patient-email-display"></span></p>
-                                        <p class="mb-1"><i class="fas fa-map-marker-alt me-2"></i><span id="patient-address-display"></span></p>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <h6>Medical History</h6>
-                                        <textarea class="form-control" id="patient-medical-history" rows="4" placeholder="Medical history notes..."></textarea>
-                                        <div class="mt-2">
-                                            <input type="file" class="form-control" id="medical-history-file" accept=".pdf,.doc,.docx,.txt">
-                                            <small class="text-muted">Attach medical history documents</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div class="mt-4">
-                                <h6>Appointments (Past & Future)</h6>
-                                <div class="table-responsive">
-                                    <table class="table table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>#</th>
-                                                <th>Date</th>
-                                                <th>Treatment</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="patient-appointments-history">
-                                            <!-- Appointments will be loaded here -->
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <button type="button" class="btn btn-primary" onclick="editPatient()">Edit Patient</button>
-                        </div>
-                    </div>
-                </div>
+                <!-- Patient cards will be populated here -->
             </div>
         </div>
 
         <!-- Appointments Section -->
         <div id="appointments-section" class="section" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-calendar-alt me-2"></i>Appointments</h2>
                 <button class="btn btn-primary" onclick="showAppointmentModal()">
                     <i class="fas fa-plus me-1"></i>Schedule Appointment
@@ -192,76 +134,66 @@
             
             <div class="row mb-3">
                 <div class="col-md-3">
-                    <label for="appointment-date-filter" class="form-label">Filter by Date:</label>
-                    <input type="date" class="form-control enhanced-date-input" id="appointment-date-filter">
+                    <input type="date" class="form-control" id="appointment-date-filter" placeholder="Filter by date">
                 </div>
                 <div class="col-md-3">
-                    <label for="appointment-status-filter" class="form-label">Filter by Status:</label>
                     <select class="form-select" id="appointment-status-filter">
                         <option value="">All Statuses</option>
                         <option value="scheduled">Scheduled</option>
                         <option value="completed">Completed</option>
                         <option value="cancelled">Cancelled</option>
-                        <option value="no_show">No Show</option>
+                        <option value="no-show">No Show</option>
                     </select>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button class="btn btn-outline-secondary" type="button" onclick="clearAppointmentFilters()">
-                        <i class="fas fa-times"></i> Clear Filters
+                <div class="col-md-3">
+                    <button class="btn btn-outline-secondary" onclick="clearAppointmentFilters()">
+                        <i class="fas fa-times me-1"></i>Clear Filters
                     </button>
                 </div>
             </div>
             
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped" id="appointments-table">
-                            <thead>
-                                <tr>
-                                    <th>Date & Time</th>
-                                    <th>Patient</th>
-                                    <th>Treatment</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Appointments will be loaded here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="appointments-table">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Patient</th>
+                            <th>Treatment</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Appointments will be populated here -->
+                    </tbody>
+                </table>
             </div>
         </div>
 
         <!-- Treatments Section -->
         <div id="treatments-section" class="section" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-procedures me-2"></i>Treatments</h2>
                 <button class="btn btn-primary" onclick="showTreatmentModal()">
                     <i class="fas fa-plus me-1"></i>Add Treatment
                 </button>
             </div>
             
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped" id="treatments-table">
-                            <thead>
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Description</th>
-                                    <th>Price</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Treatments will be loaded here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="treatments-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Price</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Treatments will be populated here -->
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -270,58 +202,55 @@
             <h2><i class="fas fa-chart-bar me-2"></i>Reports</h2>
             
             <div class="row mb-4">
-                <div class="col-md-6">
-                    <label for="report-start-date" class="form-label">Start Date:</label>
-                    <input type="date" class="form-control enhanced-date-input" id="report-start-date">
+                <div class="col-md-3">
+                    <label for="report-start-date" class="form-label">Start Date</label>
+                    <input type="date" class="form-control" id="report-start-date">
                 </div>
-                <div class="col-md-6">
-                    <label for="report-end-date" class="form-label">End Date:</label>
-                    <input type="date" class="form-control enhanced-date-input" id="report-end-date">
+                <div class="col-md-3">
+                    <label for="report-end-date" class="form-label">End Date</label>
+                    <input type="date" class="form-control" id="report-end-date">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button class="btn btn-primary" onclick="generateReports()">
+                        <i class="fas fa-chart-line me-1"></i>Generate Reports
+                    </button>
                 </div>
             </div>
-            
-            <button class="btn btn-primary mb-4" onclick="generateReports()">
-                <i class="fas fa-chart-line me-1"></i>Generate Reports
-            </button>
             
             <div id="reports-content">
                 <!-- Reports will be displayed here -->
             </div>
         </div>
 
-        <!-- User Management Section -->
+        <!-- Users Section -->
         <div id="users-section" class="section" style="display: none;">
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2><i class="fas fa-users-cog me-2"></i>User Management</h2>
                 <button class="btn btn-primary" onclick="showAddUserModal()">
                     <i class="fas fa-user-plus me-1"></i>Add User
                 </button>
             </div>
             
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped" id="users-table">
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Email</th>
-                                    <th>Created Date</th>
-                                    <th>Last Login</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Users will be loaded here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="table-responsive">
+                <table class="table table-striped" id="users-table">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Email</th>
+                            <th>Created</th>
+                            <th>Last Login</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Users will be populated here -->
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <!-- Patient Modal (Simplified Form) -->
+    <!-- Patient Modal -->
     <div class="modal fade" id="patientModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -360,13 +289,19 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="date-of-birth" class="form-label">Date of Birth</label>
-                            <input type="date" class="form-control enhanced-date-input" id="date-of-birth">
-                        </div>
-                        <div class="mb-3">
-                            <label for="address" class="form-label">Address</label>
-                            <textarea class="form-control" id="address" rows="2"></textarea>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="date-of-birth" class="form-label">Date of Birth</label>
+                                    <input type="date" class="form-control" id="date-of-birth">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="address" class="form-label">Address</label>
+                                    <input type="text" class="form-control" id="address">
+                                </div>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label for="medical-history" class="form-label">Medical History</label>
@@ -374,12 +309,12 @@
                         </div>
                         <div class="mb-3">
                             <label for="patient-notes" class="form-label">Notes</label>
-                            <textarea class="form-control" id="patient-notes" rows="3" placeholder="Additional notes about the patient..."></textarea>
+                            <textarea class="form-control" id="patient-notes" rows="2" placeholder="Additional notes about the patient..."></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="patient-attachment" class="form-label">Attachment</label>
-                            <input type="file" class="form-control" id="patient-attachment" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png">
-                            <small class="text-muted">Attach documents or images related to the patient</small>
+                            <label for="patient-attachment" class="form-label">Attach Document</label>
+                            <input type="file" class="form-control" id="patient-attachment" accept=".pdf,.doc,.docx,.jpg,.png">
+                            <small class="text-muted">Upload medical records, insurance cards, etc.</small>
                         </div>
                     </form>
                 </div>
@@ -391,9 +326,60 @@
         </div>
     </div>
 
+    <!-- Patient Detail Modal -->
+    <div class="modal fade" id="patientDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Patient Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Patient Information</h6>
+                            <p><strong>Name:</strong> <span id="patient-name-display"></span></p>
+                            <p><strong>Phone:</strong> <span id="patient-phone-display"></span></p>
+                            <p><strong>Email:</strong> <span id="patient-email-display"></span></p>
+                            <p><strong>Address:</strong> <span id="patient-address-display"></span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Medical History</h6>
+                            <textarea class="form-control" id="patient-medical-history" rows="4" readonly></textarea>
+                        </div>
+                    </div>
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <h6>Appointments (Past & Future)</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Date</th>
+                                            <th>Treatment</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="patient-appointments-history">
+                                        <!-- Appointments will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="editPatient()">Edit Patient</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Appointment Modal -->
     <div class="modal fade" id="appointmentModal" tabindex="-1">
-        <div class="modal-dialog">
+        <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="appointmentModalTitle">Schedule Appointment</h5>
@@ -402,39 +388,55 @@
                 <div class="modal-body">
                     <form id="appointmentForm">
                         <input type="hidden" id="appointment-id">
-                        <div class="mb-3">
-                            <label for="appointment-patient-search" class="form-label">Patient *</label>
-                            <div class="position-relative">
-                                <input type="text" class="form-control" id="appointment-patient-search" 
-                                       placeholder="Search and select a patient..." autocomplete="off" required>
-                                <input type="hidden" id="appointment-patient" required>
-                                <div class="dropdown-menu w-100" id="patient-search-dropdown" style="max-height: 200px; overflow-y: auto;">
-                                    <!-- Patient search results will appear here -->
+                        <input type="hidden" id="appointment-patient">
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="appointment-patient-search" class="form-label">Patient *</label>
+                                    <div class="position-relative">
+                                        <input type="text" class="form-control" id="appointment-patient-search" 
+                                               placeholder="Search for patient..." required>
+                                        <div id="patient-search-dropdown" class="dropdown-menu w-100" style="display: none;">
+                                            <!-- Patient search results will appear here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="appointment-date" class="form-label">Date & Time *</label>
+                                    <input type="datetime-local" class="form-control appointment-date-input" id="appointment-date" required>
                                 </div>
                             </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="appointment-date" class="form-label">Date & Time *</label>
-                            <input type="datetime-local" class="form-control enhanced-date-input" id="appointment-date" required>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="appointment-treatment" class="form-label">Treatment</label>
+                                    <select class="form-select" id="appointment-treatment">
+                                        <option value="">Select a treatment...</option>
+                                        <!-- Treatments will be populated here -->
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="appointment-status" class="form-label">Status</label>
+                                    <select class="form-select" id="appointment-status">
+                                        <option value="scheduled">Scheduled</option>
+                                        <option value="completed">Completed</option>
+                                        <option value="cancelled">Cancelled</option>
+                                        <option value="no-show">No Show</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="appointment-treatment" class="form-label">Treatment Type</label>
-                            <select class="form-select" id="appointment-treatment">
-                                <option value="">Select a treatment...</option>
-                            </select>
-                        </div>
+                        
                         <div class="mb-3">
                             <label for="appointment-notes" class="form-label">Notes</label>
-                            <textarea class="form-control" id="appointment-notes" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="appointment-status" class="form-label">Status</label>
-                            <select class="form-select" id="appointment-status">
-                                <option value="scheduled">Scheduled</option>
-                                <option value="completed">Completed</option>
-                                <option value="cancelled">Cancelled</option>
-                                <option value="no_show">No Show</option>
-                            </select>
+                            <textarea class="form-control" id="appointment-notes" rows="3" placeholder="Additional notes for this appointment..."></textarea>
                         </div>
                     </form>
                 </div>
@@ -466,16 +468,12 @@
                             <textarea class="form-control" id="treatment-description" rows="3"></textarea>
                         </div>
                         <div class="mb-3">
-                            <label for="treatment-price" class="form-label">Price</label>
+                            <label for="treatment-price" class="form-label">Price ($)</label>
                             <input type="number" class="form-control" id="treatment-price" step="0.01" min="0">
                         </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="treatment-active" checked>
-                                <label class="form-check-label" for="treatment-active">
-                                    Active
-                                </label>
-                            </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="treatment-active" checked>
+                            <label class="form-check-label" for="treatment-active">Active</label>
                         </div>
                     </form>
                 </div>
@@ -492,7 +490,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Add New User</h5>
+                    <h5 class="modal-title">Add User</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -585,7 +583,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
