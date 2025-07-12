@@ -996,8 +996,8 @@ async function saveTreatment() {
     const treatmentData = {
         name: document.getElementById('treatment-name').value,
         description: document.getElementById('treatment-description').value || null,
-        duration_minutes: parseInt(document.getElementById('treatment-duration').value) || 60,
-        price: parseFloat(document.getElementById('treatment-price').value) || 0,
+        duration_minutes: parseInt(document.getElementById('treatment-duration').value),
+        price: parseFloat(document.getElementById('treatment-price').value) || null,
         is_active: document.getElementById('treatment-active').checked
     };
     
@@ -1017,7 +1017,12 @@ async function saveTreatment() {
         
         if (response && response.ok) {
             bootstrap.Modal.getInstance(document.getElementById('treatmentModal')).hide();
-            loadTreatments();
+            
+            // FIX: Add delay and cache-busting to ensure fresh data
+            setTimeout(async () => {
+                await loadTreatments();
+            }, 500);
+            
             showSuccess(treatmentId ? 'Treatment updated successfully' : 'Treatment added successfully');
         } else {
             const error = await response.json();
@@ -1028,6 +1033,7 @@ async function saveTreatment() {
         showError('Failed to save treatment');
     }
 }
+
 
 function editTreatment(treatmentId) {
     showTreatmentModal(treatmentId);
