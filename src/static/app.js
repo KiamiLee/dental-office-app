@@ -1,8 +1,8 @@
+// Global variables
 let currentSection = 'dashboard';
 let patients = [];
 let appointments = [];
 let treatments = [];
-let users = [];
 let currentUser = null;
 
 // API base URL
@@ -137,15 +137,15 @@ function setupEventListeners() {
 }
 
 function setupDatePickerBehavior() {
-    // Add event listeners to all enhanced date inputs for improved UX
-    document.querySelectorAll('.enhanced-date-input').forEach(input => {
+    // Add event listeners to all date inputs for improved UX
+    document.querySelectorAll('.appointment-date-input').forEach(input => {
         input.addEventListener('focus', function() {
             // Show calendar on focus (native behavior)
-            if (this.showPicker) this.showPicker();
+            this.showPicker && this.showPicker();
         });
         
         input.addEventListener('change', function() {
-            // Auto-hide calendar on selection by blurring the input
+            // Auto-hide calendar on selection (native behavior handles this)
             this.blur();
         });
     });
@@ -258,7 +258,7 @@ function showSection(sectionName) {
     }
 }
 
-// Dashboard functions - FIXED
+// Dashboard functions
 async function loadDashboard() {
     try {
         // Load dashboard stats
@@ -278,8 +278,12 @@ async function loadDashboard() {
         
         displayTodayAppointments(todayAppointments);
         
-        // BUG FIX #3: Load upcoming appointments (next day to end of week) - FIXED DATE LOGIC
-        const upcomingAppointments = await loadUpcomingAppointments();
+        // Load upcoming appointments
+        const upcomingResponse = await authenticatedFetch(`${API_BASE}/appointments/upcoming`);
+        if (!upcomingResponse) return;
+        
+        const upcomingAppointments = await upcomingResponse.json();
+        
         displayUpcomingAppointments(upcomingAppointments);
         
     } catch (error) {
@@ -288,84 +292,30 @@ async function loadDashboard() {
     }
 }
 
-// BUG FIX #3: Fixed upcoming appointments date logic
-async function loadUpcomingAppointments() {
-    try {
-        const now = new Date();
-        const tomorrow = new Date(now);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        // Calculate end of current week (Sunday)
-        const endOfWeek = new Date(now);
-        const daysUntilSunday = 7 - endOfWeek.getDay();
-        if (daysUntilSunday === 7) {
-            // If today is Sunday, get next Sunday
-            endOfWeek.setDate(endOfWeek.getDate() + 7);
-        } else {
-            endOfWeek.setDate(endOfWeek.getDate() + daysUntilSunday);
-        }
-        
-        const startDate = tomorrow.toISOString().split('T')[0];
-        const endDate = endOfWeek.toISOString().split('T')[0];
-        
-        // Use proper date range filtering
-        const response = await authenticatedFetch(`${API_BASE}/appointments`);
-        if (response && response.ok) {
-            const allAppointments = await response.json();
-            
-            // Filter appointments between tomorrow and end of week
-            const upcomingAppointments = allAppointments.filter(appointment => {
-                const appointmentDate = new Date(appointment.appointment_date).toISOString().split('T')[0];
-                return appointmentDate >= startDate && appointmentDate <= endDate;
-            });
-            
-            return upcomingAppointments;
-        }
-        return [];
-    } catch (error) {
-        console.error('Error loading upcoming appointments:', error);
-        return [];
-    }
-}
-
-// Reorder dashboard boxes and remove "This Week"
 function displayDashboardStats(stats) {
     const statsContainer = document.getElementById('dashboard-stats');
     if (!statsContainer) return;
     
-    // Reorder as Today's Appointments - Upcoming Appointments - Total Patients
     statsContainer.innerHTML = `
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="stat-card">
                 <h3>${stats.today_appointments}</h3>
                 <p><i class="fas fa-calendar-day me-1"></i>Today's Appointments</p>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stat-card info">
+        <div class="col-md-3">
+            <div class="stat-card success">
                 <h3>${stats.upcoming_appointments}</h3>
                 <p><i class="fas fa-clock me-1"></i>Upcoming Appointments</p>
             </div>
         </div>
-        <div class="col-md-4">
-            <div class="stat-card warning" onclick="navigateToPatients()" style="cursor: pointer;">
+        <div class="col-md-3">
+            <div class="stat-card warning" onclick="showSection('patients')" style="cursor: pointer;">
                 <h3>${stats.total_patients}</h3>
                 <p><i class="fas fa-users me-1"></i>Total Patients</p>
             </div>
         </div>
     `;
-}
-
-// Navigate to patients tab when clicking Total Patients box
-function navigateToPatients() {
-    showSection('patients');
-    // Update navigation active state
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active');
-        if (link.getAttribute('onclick') && link.getAttribute('onclick').includes('patients')) {
-            link.classList.add('active');
-        }
-    });
 }
 
 function displayTodayAppointments(appointments) {
@@ -381,7 +331,7 @@ function displayTodayAppointments(appointments) {
         <div class="appointment-item ${appointment.status}">
             <div class="appointment-time">${formatTime(appointment.appointment_date)}</div>
             <div class="appointment-patient">${appointment.patient_name}</div>
-            <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
+            <div class="appointment-treatment">${appointment.treatment_type}</div>
         </div>
     `).join('');
 }
@@ -390,16 +340,29 @@ function displayUpcomingAppointments(appointments) {
     const container = document.getElementById('upcoming-appointments');
     if (!container) return;
     
-    if (appointments.length === 0) {
+    // Filter to show only appointments from next day until end of week
+    const today = new Date();
+    const nextDay = new Date(today);
+    nextDay.setDate(today.getDate() + 1);
+    
+    const endOfWeek = new Date(today);
+    endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+    
+    const filteredAppointments = appointments.filter(appointment => {
+        const appointmentDate = new Date(appointment.appointment_date);
+        return appointmentDate >= nextDay && appointmentDate <= endOfWeek;
+    });
+    
+    if (filteredAppointments.length === 0) {
         container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-plus"></i><p>No upcoming appointments this week</p></div>';
         return;
     }
     
-    container.innerHTML = appointments.slice(0, 5).map(appointment => `
+    container.innerHTML = filteredAppointments.slice(0, 5).map(appointment => `
         <div class="appointment-item">
             <div class="appointment-time">${formatDateTime(appointment.appointment_date)}</div>
             <div class="appointment-patient">${appointment.patient_name}</div>
-            <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
+            <div class="appointment-treatment">${appointment.treatment_type}</div>
         </div>
     `).join('');
 }
@@ -445,7 +408,7 @@ function renderPatientCards(patientList = patients) {
                     <div class="patient-info flex-grow-1">
                         <h6 class="mb-1"><strong>${patient.first_name} ${patient.last_name}</strong></h6>
                         <p class="mb-1 text-muted small"><i class="fas fa-phone me-1"></i>${patient.phone}</p>
-                        <p class="mb-0 text-muted small"><i class="fas fa-envelope me-1"></i>${patient.email}</p>
+                        <p class="mb-0 text-muted small"><i class="fas fa-envelope me-1"></i>${patient.email || 'No email'}</p>
                     </div>
                 </div>
             </div>
@@ -458,15 +421,9 @@ function searchPatients(query) {
         patient.first_name.toLowerCase().includes(query.toLowerCase()) ||
         patient.last_name.toLowerCase().includes(query.toLowerCase()) ||
         patient.phone.includes(query) ||
-        patient.email.toLowerCase().includes(query.toLowerCase())
+        (patient.email && patient.email.toLowerCase().includes(query.toLowerCase()))
     );
     renderPatientCards(filteredPatients);
-}
-
-// Clear filter function for patients
-function clearPatientFilters() {
-    document.getElementById('patient-search').value = '';
-    renderPatientCards(patients);
 }
 
 function getPatientInitials(firstName, lastName) {
@@ -487,49 +444,35 @@ async function selectPatient(patientId) {
     }
 }
 
-// Show both past and future appointments, fix bug showing same appointments
 async function showPatientDetails(patient) {
+    // Load patient's appointments (both past and future)
     try {
-        // Load patient's appointments (both past and future)
         const response = await authenticatedFetch(`${API_BASE}/appointments?patient_id=${patient.id}`);
-        let patientAppointments = [];
+        let allAppointments = [];
         if (response && response.ok) {
-            patientAppointments = await response.json();
+            allAppointments = await response.json();
         }
         
         // Update the existing patient detail modal
         document.getElementById('patient-name-display').innerHTML = `<strong>${patient.first_name} ${patient.last_name}</strong>`;
         document.getElementById('patient-phone-display').textContent = patient.phone;
-        document.getElementById('patient-email-display').textContent = patient.email;
+        document.getElementById('patient-email-display').textContent = patient.email || 'Not provided';
         document.getElementById('patient-address-display').textContent = patient.address || 'Not provided';
         document.getElementById('patient-medical-history').value = patient.medical_history || '';
         
-        // Store current patient ID for editing
-        document.getElementById('patient-detail-modal').setAttribute('data-patient-id', patient.id);
-        
-        // Update appointments table with both past and future
+        // Update appointments (both past and future)
         const appointmentsTable = document.getElementById('patient-appointments-history');
-        if (patientAppointments.length > 0) {
-            // Sort appointments by date
-            patientAppointments.sort((a, b) => new Date(a.appointment_date) - new Date(b.appointment_date));
-            
-            appointmentsTable.innerHTML = patientAppointments.map((apt, index) => {
-                const appointmentDate = new Date(apt.appointment_date);
-                const now = new Date();
-                const isPast = appointmentDate < now;
-                const statusClass = isPast ? 'text-muted' : 'fw-bold';
-                
-                return `
-                    <tr class="${isPast ? 'table-secondary' : ''}">
-                        <td>${index + 1}</td>
-                        <td class="${statusClass}">${formatDate(apt.appointment_date)}</td>
-                        <td>${apt.treatment_name || 'No treatment specified'}</td>
-                        <td><span class="badge status-${apt.status}">${apt.status}</span></td>
-                    </tr>
-                `;
-            }).join('');
+        if (allAppointments.length > 0) {
+            appointmentsTable.innerHTML = allAppointments.map((apt, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${formatDate(apt.appointment_date)}</td>
+                    <td>${apt.treatment_type || 'N/A'}</td>
+                    <td><span class="badge status-${apt.status}">${apt.status}</span></td>
+                </tr>
+            `).join('');
         } else {
-            appointmentsTable.innerHTML = '<tr><td colspan="4" class="text-center">No appointments found</td></tr>';
+            appointmentsTable.innerHTML = '<tr><td colspan="4" class="text-center">No appointments</td></tr>';
         }
         
         // Show the modal
@@ -567,7 +510,7 @@ async function loadPatientData(patientId) {
             document.getElementById('patient-id').value = patient.id;
             document.getElementById('first-name').value = patient.first_name;
             document.getElementById('last-name').value = patient.last_name;
-            document.getElementById('email').value = patient.email;
+            document.getElementById('email').value = patient.email || '';
             document.getElementById('phone').value = patient.phone;
             document.getElementById('date-of-birth').value = patient.date_of_birth || '';
             document.getElementById('address').value = patient.address || '';
@@ -585,38 +528,23 @@ async function loadPatientData(patientId) {
     }
 }
 
-// BUG FIX #4: Fixed patient creation with file attachments
 async function savePatient() {
     const patientId = document.getElementById('patient-id').value;
-    
-    // Validate required fields (email is now optional)
-    const firstName = document.getElementById('first-name').value.trim();
-    const lastName = document.getElementById('last-name').value.trim();
-    const phone = document.getElementById('phone').value.trim();
-    
-    if (!firstName || !lastName || !phone) {
-        showError('First name, last name, and phone are required');
-        return;
-    }
-    
     const patientData = {
-        first_name: firstName,
-        last_name: lastName,
-        email: document.getElementById('email').value.trim() || null, // Optional
-        phone: phone,
+        first_name: document.getElementById('first-name').value,
+        last_name: document.getElementById('last-name').value,
+        email: document.getElementById('email').value || null,
+        phone: document.getElementById('phone').value,
         date_of_birth: document.getElementById('date-of-birth').value || null,
-        address: document.getElementById('address').value.trim() || null,
-        medical_history: document.getElementById('medical-history').value.trim() || null
+        address: document.getElementById('address').value || null,
+        medical_history: document.getElementById('medical-history').value || null
     };
     
     // Add notes if the field exists
     const notesField = document.getElementById('patient-notes');
     if (notesField) {
-        patientData.notes = notesField.value.trim() || null;
+        patientData.notes = notesField.value || null;
     }
-    
-    // BUG FIX #4: Handle file attachments properly - remove file handling for now since backend doesn't support it
-    // File attachments will be handled separately or require backend changes
     
     try {
         let response;
@@ -647,78 +575,23 @@ async function savePatient() {
 }
 
 function editPatient() {
-    // Get patient ID from the detail modal
-    const patientId = document.getElementById('patient-detail-modal').getAttribute('data-patient-id');
-    if (patientId) {
+    // Get patient ID from the detail modal and open edit modal
+    const patientName = document.getElementById('patient-name-display').textContent;
+    // Find patient by name (this is a simplified approach)
+    const patient = patients.find(p => `${p.first_name} ${p.last_name}` === patientName);
+    if (patient) {
         bootstrap.Modal.getInstance(document.getElementById('patientDetailModal')).hide();
-        showPatientModal(patientId);
+        showPatientModal(patient.id);
     }
 }
 
-// File preview functionality - simplified for now
-function previewAttachedFile(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    const previewContainer = document.getElementById('file-preview-container') || document.getElementById('edit-file-preview-container');
-    if (!previewContainer) return;
-    
-    const fileType = file.type;
-    const fileName = file.name;
-    
-    if (fileType.startsWith('image/')) {
-        // Preview image files
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            previewContainer.innerHTML = `
-                <div class="file-preview">
-                    <h6>File Preview: ${fileName}</h6>
-                    <img src="${e.target.result}" alt="Preview" style="max-width: 100%; max-height: 200px;" class="img-thumbnail">
-                    <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="clearFilePreview()">
-                        <i class="fas fa-times"></i> Remove
-                    </button>
-                </div>
-            `;
-        };
-        reader.readAsDataURL(file);
-    } else if (fileType === 'application/pdf') {
-        // Preview PDF files
-        previewContainer.innerHTML = `
-            <div class="file-preview">
-                <h6>File Preview: ${fileName}</h6>
-                <div class="alert alert-info">
-                    <i class="fas fa-file-pdf"></i> PDF file selected (${(file.size / 1024 / 1024).toFixed(2)} MB)
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilePreview()">
-                    <i class="fas fa-times"></i> Remove
-                </button>
-            </div>
-        `;
-    } else {
-        // Preview other file types
-        previewContainer.innerHTML = `
-            <div class="file-preview">
-                <h6>File Preview: ${fileName}</h6>
-                <div class="alert alert-secondary">
-                    <i class="fas fa-file"></i> ${fileType || 'Unknown file type'} (${(file.size / 1024 / 1024).toFixed(2)} MB)
-                </div>
-                <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearFilePreview()">
-                    <i class="fas fa-times"></i> Remove
-                </button>
-            </div>
-        `;
-    }
+// Clear patient search filter
+function clearPatientFilter() {
+    document.getElementById('patient-search').value = '';
+    renderPatientCards(patients);
 }
 
-function clearFilePreview() {
-    const previewContainer = document.getElementById('file-preview-container') || document.getElementById('edit-file-preview-container');
-    const fileInput = document.getElementById('medical-history-file') || document.getElementById('edit-medical-history-file');
-    
-    if (previewContainer) previewContainer.innerHTML = '';
-    if (fileInput) fileInput.value = '';
-}
-
-// Appointment functions - FIXED
+// Appointment functions
 async function loadAppointments() {
     try {
         let url = `${API_BASE}/appointments`;
@@ -745,19 +618,12 @@ async function loadAppointments() {
     }
 }
 
-// Clear appointment filters
-function clearAppointmentFilters() {
-    document.getElementById('appointment-date-filter').value = '';
-    document.getElementById('appointment-status-filter').value = '';
-    loadAppointments();
-}
-
-function renderAppointments(appointmentList = appointments) {
+function renderAppointments(appointmentList) {
     const tbody = document.querySelector('#appointments-table tbody');
     if (!tbody) return;
     
     if (appointmentList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No appointments found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No appointments found</td></tr>';
         return;
     }
     
@@ -765,8 +631,7 @@ function renderAppointments(appointmentList = appointments) {
         <tr>
             <td>${formatDateTime(appointment.appointment_date)}</td>
             <td>${appointment.patient_name}</td>
-            <td>${appointment.treatment_name || 'No treatment specified'}</td>
-            <td>${appointment.duration} min</td>
+            <td>${appointment.treatment_type}</td>
             <td><span class="badge status-${appointment.status}">${appointment.status}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="editAppointment(${appointment.id})">
@@ -784,6 +649,9 @@ function showAppointmentModal(appointmentId = null) {
     const modal = new bootstrap.Modal(document.getElementById('appointmentModal'));
     const title = document.getElementById('appointmentModalTitle');
     
+    // Load patients and treatments for dropdowns
+    loadTreatmentsForDropdown();
+    
     if (appointmentId) {
         title.textContent = 'Edit Appointment';
         loadAppointmentData(appointmentId);
@@ -791,27 +659,30 @@ function showAppointmentModal(appointmentId = null) {
         title.textContent = 'Schedule Appointment';
         document.getElementById('appointmentForm').reset();
         document.getElementById('appointment-id').value = '';
-        loadTreatmentOptions();
+        document.getElementById('appointment-status').value = 'scheduled';
+        
+        // Clear patient search
+        document.getElementById('appointment-patient-search').value = '';
+        document.getElementById('appointment-patient').value = '';
     }
     
     modal.show();
 }
 
-async function loadTreatmentOptions() {
+async function loadTreatmentsForDropdown() {
     try {
-        const response = await authenticatedFetch(`${API_BASE}/treatments`);
+        const response = await authenticatedFetch(`${API_BASE}/treatments?active_only=true`);
         if (response && response.ok) {
             const treatments = await response.json();
-            const select = document.getElementById('appointment-treatment');
             
-            // Make treatment type optional
-            select.innerHTML = '<option value="">No specific treatment</option>' + 
-                treatments.filter(t => t.is_active).map(treatment => 
-                    `<option value="${treatment.id}">${treatment.name}</option>`
-                ).join('');
+            const select = document.getElementById('appointment-treatment');
+            if (select) {
+                select.innerHTML = '<option value="">Select a treatment...</option>' +
+                    treatments.map(treatment => `<option value="${treatment.name}">${treatment.name}</option>`).join('');
+            }
         }
     } catch (error) {
-        console.error('Error loading treatments:', error);
+        console.error('Error loading treatments for dropdown:', error);
     }
 }
 
@@ -822,16 +693,12 @@ async function loadAppointmentData(appointmentId) {
             const appointment = await response.json();
             
             document.getElementById('appointment-id').value = appointment.id;
-            document.getElementById('appointment-patient-search').value = appointment.patient_name;
             document.getElementById('appointment-patient').value = appointment.patient_id;
+            document.getElementById('appointment-patient-search').value = appointment.patient_name || '';
             document.getElementById('appointment-date').value = appointment.appointment_date.slice(0, 16);
-            document.getElementById('appointment-treatment').value = appointment.treatment_id || '';
-            document.getElementById('appointment-duration').value = appointment.duration || '';
+            document.getElementById('appointment-treatment').value = appointment.treatment_type;
             document.getElementById('appointment-notes').value = appointment.notes || '';
             document.getElementById('appointment-status').value = appointment.status;
-            
-            await loadTreatmentOptions();
-            document.getElementById('appointment-treatment').value = appointment.treatment_id || '';
         }
     } catch (error) {
         console.error('Error loading appointment data:', error);
@@ -839,24 +706,19 @@ async function loadAppointmentData(appointmentId) {
     }
 }
 
-// BUG FIX #2: Fixed appointment validation - treatment type is now truly optional
 async function saveAppointment() {
     const appointmentId = document.getElementById('appointment-id').value;
     const patientId = document.getElementById('appointment-patient').value;
-    const appointmentDate = document.getElementById('appointment-date').value;
     
-    if (!patientId || !appointmentDate) {
-        showError('Patient and appointment date are required');
+    if (!patientId) {
+        showError('Please select a patient');
         return;
     }
     
-    const treatmentValue = document.getElementById('appointment-treatment').value;
-    
     const appointmentData = {
         patient_id: parseInt(patientId),
-        appointment_date: appointmentDate,
-        treatment_id: treatmentValue ? parseInt(treatmentValue) : null, // Properly handle empty treatment
-        duration: parseInt(document.getElementById('appointment-duration').value),
+        appointment_date: document.getElementById('appointment-date').value,
+        treatment_type: document.getElementById('appointment-treatment').value,
         notes: document.getElementById('appointment-notes').value || null,
         status: document.getElementById('appointment-status').value
     };
@@ -894,7 +756,9 @@ function editAppointment(appointmentId) {
 }
 
 async function deleteAppointment(appointmentId) {
-    if (!confirm('Are you sure you want to delete this appointment?')) return;
+    if (!confirm('Are you sure you want to delete this appointment?')) {
+        return;
+    }
     
     try {
         const response = await authenticatedFetch(`${API_BASE}/appointments/${appointmentId}`, {
@@ -913,6 +777,13 @@ async function deleteAppointment(appointmentId) {
     }
 }
 
+// Clear appointment filters
+function clearAppointmentFilters() {
+    document.getElementById('appointment-date-filter').value = '';
+    document.getElementById('appointment-status-filter').value = '';
+    loadAppointments();
+}
+
 // Treatment functions
 async function loadTreatments() {
     try {
@@ -927,21 +798,20 @@ async function loadTreatments() {
     }
 }
 
-function renderTreatments(treatmentList = treatments) {
+function renderTreatments(treatmentList) {
     const tbody = document.querySelector('#treatments-table tbody');
     if (!tbody) return;
     
     if (treatmentList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center">No treatments found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">No treatments found</td></tr>';
         return;
     }
     
     tbody.innerHTML = treatmentList.map(treatment => `
         <tr>
             <td>${treatment.name}</td>
-            <td>${treatment.description || 'No description'}</td>
-            <td>${treatment.duration}</td>
-            <td>$${treatment.price ? treatment.price.toFixed(2) : '0.00'}</td>
+            <td>${treatment.description || '-'}</td>
+            <td>${treatment.price ? '$' + treatment.price.toFixed(2) : '-'}</td>
             <td><span class="badge ${treatment.is_active ? 'bg-success' : 'bg-secondary'}">${treatment.is_active ? 'Active' : 'Inactive'}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="editTreatment(${treatment.id})">
@@ -981,7 +851,6 @@ async function loadTreatmentData(treatmentId) {
             document.getElementById('treatment-id').value = treatment.id;
             document.getElementById('treatment-name').value = treatment.name;
             document.getElementById('treatment-description').value = treatment.description || '';
-            document.getElementById('treatment-duration').value = treatment.duration || '';
             document.getElementById('treatment-price').value = treatment.price || '';
             document.getElementById('treatment-active').checked = treatment.is_active;
         }
@@ -996,7 +865,6 @@ async function saveTreatment() {
     const treatmentData = {
         name: document.getElementById('treatment-name').value,
         description: document.getElementById('treatment-description').value || null,
-        duration_minutes: parseInt(document.getElementById('treatment-duration').value),
         price: parseFloat(document.getElementById('treatment-price').value) || null,
         is_active: document.getElementById('treatment-active').checked
     };
@@ -1017,12 +885,7 @@ async function saveTreatment() {
         
         if (response && response.ok) {
             bootstrap.Modal.getInstance(document.getElementById('treatmentModal')).hide();
-            
-            // FIX: Add delay and cache-busting to ensure fresh data
-            setTimeout(async () => {
-                await loadTreatments();
-            }, 500);
-            
+            loadTreatments();
             showSuccess(treatmentId ? 'Treatment updated successfully' : 'Treatment added successfully');
         } else {
             const error = await response.json();
@@ -1034,24 +897,26 @@ async function saveTreatment() {
     }
 }
 
-
 function editTreatment(treatmentId) {
     showTreatmentModal(treatmentId);
 }
 
 async function deleteTreatment(treatmentId) {
-    if (!confirm('Are you sure you want to delete this treatment?')) return;
-    
+    if (!confirm('Are you sure you want to delete this treatment?')) {
+        return;
+    }
+
     try {
         const response = await authenticatedFetch(`${API_BASE}/treatments/${treatmentId}`, {
             method: 'DELETE'
         });
-        
+
         if (response && response.ok) {
             loadTreatments();
             showSuccess('Treatment deleted successfully');
         } else {
-            showError('Failed to delete treatment');
+            const error = await response.json();
+            showError(error.error || 'Failed to delete treatment');
         }
     } catch (error) {
         console.error('Error deleting treatment:', error);
@@ -1064,8 +929,8 @@ async function loadUsers() {
     try {
         const response = await authenticatedFetch(`${API_BASE}/users`);
         if (response && response.ok) {
-            users = await response.json();
-            renderUsers(users);
+            const users = await response.json();
+            displayUsers(users);
         }
     } catch (error) {
         console.error('Error loading users:', error);
@@ -1073,16 +938,16 @@ async function loadUsers() {
     }
 }
 
-function renderUsers(userList = users) {
+function displayUsers(users) {
     const tbody = document.querySelector('#users-table tbody');
     if (!tbody) return;
     
-    if (userList.length === 0) {
+    if (users.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="text-center">No users found</td></tr>';
         return;
     }
     
-    tbody.innerHTML = userList.map(user => `
+    tbody.innerHTML = users.map(user => `
         <tr>
             <td>${user.username}</td>
             <td>${user.email}</td>
@@ -1090,44 +955,126 @@ function renderUsers(userList = users) {
             <td>${user.last_login ? formatDate(user.last_login) : 'Never'}</td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="editUser(${user.id})">
-                    <i class="fas fa-edit"></i> Edit
+                    <i class="fas fa-edit"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})" ${user.id === currentUser.id ? 'disabled' : ''}>
-                    <i class="fas fa-trash"></i> Delete
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id})">
+                    <i class="fas fa-trash"></i>
                 </button>
             </td>
         </tr>
     `).join('');
 }
 
-// Edit User functionality
-function editUser(userId) {
-    const user = users.find(u => u.id === userId);
-    if (!user) return;
-    
-    // Populate edit user modal
-    document.getElementById('edit-user-id').value = user.id;
-    document.getElementById('edit-username').value = user.username;
-    document.getElementById('edit-email').value = user.email;
-    document.getElementById('edit-is-active').checked = user.is_active;
-    
-    // Show edit user modal
-    const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+function showAddUserModal() {
+    const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+    document.getElementById('addUserForm').reset();
     modal.show();
 }
 
-async function saveUserEdit() {
+async function saveNewUser() {
+    const username = document.getElementById('new-username').value;
+    const email = document.getElementById('new-email').value;
+    const password = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    if (password !== confirmPassword) {
+        showError('Passwords do not match');
+        return;
+    }
+    
+    const userData = {
+        username: username,
+        email: email,
+        password: password
+    };
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/users`, {
+            method: 'POST',
+            body: JSON.stringify(userData)
+        });
+        
+        if (response && response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
+            loadUsers();
+            showSuccess('User added successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to add user');
+        }
+    } catch (error) {
+        console.error('Error adding user:', error);
+        showError('Failed to add user');
+    }
+}
+
+function showChangePasswordModal() {
+    const modal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
+    document.getElementById('changePasswordForm').reset();
+    modal.show();
+}
+
+async function savePasswordChange() {
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password-change').value;
+    const confirmNewPassword = document.getElementById('confirm-new-password').value;
+    
+    if (newPassword !== confirmNewPassword) {
+        showError('New passwords do not match');
+        return;
+    }
+    
+    const passwordData = {
+        current_password: currentPassword,
+        new_password: newPassword
+    };
+    
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/change-password`, {
+            method: 'POST',
+            body: JSON.stringify(passwordData)
+        });
+        
+        if (response && response.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
+            showSuccess('Password changed successfully');
+        } else {
+            const error = await response.json();
+            showError(error.error || 'Failed to change password');
+        }
+    } catch (error) {
+        console.error('Error changing password:', error);
+        showError('Failed to change password');
+    }
+}
+
+async function editUser(userId) {
+    try {
+        const response = await authenticatedFetch(`${API_BASE}/users/${userId}`);
+        if (response && response.ok) {
+            const user = await response.json();
+            showEditUserModal(user);
+        }
+    } catch (error) {
+        console.error('Error loading user data:', error);
+        showError('Failed to load user data');
+    }
+}
+
+function showEditUserModal(user) {
+    const modal = new bootstrap.Modal(document.getElementById('editUserModal'));
+    document.getElementById('edit-user-id').value = user.id;
+    document.getElementById('edit-username').value = user.username;
+    document.getElementById('edit-email').value = user.email;
+    modal.show();
+}
+
+async function saveEditUser() {
     const userId = document.getElementById('edit-user-id').value;
     const userData = {
         username: document.getElementById('edit-username').value,
-        email: document.getElementById('edit-email').value,
-        is_active: document.getElementById('edit-is-active').checked
+        email: document.getElementById('edit-email').value
     };
-    
-    const newPassword = document.getElementById('edit-password').value;
-    if (newPassword) {
-        userData.password = newPassword;
-    }
     
     try {
         const response = await authenticatedFetch(`${API_BASE}/users/${userId}`, {
@@ -1149,48 +1096,10 @@ async function saveUserEdit() {
     }
 }
 
-function showAddUserModal() {
-    document.getElementById('addUserForm').reset();
-    const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
-    modal.show();
-}
-
-async function saveNewUser() {
-    const userData = {
-        username: document.getElementById('new-username').value,
-        email: document.getElementById('new-email').value,
-        password: document.getElementById('new-password').value
-    };
-    
-    const confirmPassword = document.getElementById('confirm-password').value;
-    
-    if (userData.password !== confirmPassword) {
-        showError('Passwords do not match');
+async function deleteUser(userId) {
+    if (!confirm('Are you sure you want to delete this user?')) {
         return;
     }
-    
-    try {
-        const response = await authenticatedFetch(`${API_BASE}/users`, {
-            method: 'POST',
-            body: JSON.stringify(userData)
-        });
-        
-        if (response && response.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('addUserModal')).hide();
-            loadUsers();
-            showSuccess('User created successfully');
-        } else {
-            const error = await response.json();
-            showError(error.error || 'Failed to create user');
-        }
-    } catch (error) {
-        console.error('Error creating user:', error);
-        showError('Failed to create user');
-    }
-}
-
-async function deleteUser(userId) {
-    if (!confirm('Are you sure you want to delete this user?')) return;
     
     try {
         const response = await authenticatedFetch(`${API_BASE}/users/${userId}`, {
@@ -1210,67 +1119,7 @@ async function deleteUser(userId) {
     }
 }
 
-function showChangePasswordModal() {
-    document.getElementById('changePasswordForm').reset();
-    const modal = new bootstrap.Modal(document.getElementById('changePasswordModal'));
-    modal.show();
-}
-
-async function savePasswordChange() {
-    const currentPassword = document.getElementById('current-password').value;
-    const newPassword = document.getElementById('new-password-change').value;
-    const confirmPassword = document.getElementById('confirm-new-password').value;
-    
-    if (newPassword !== confirmPassword) {
-        showError('New passwords do not match');
-        return;
-    }
-    
-    try {
-        const response = await authenticatedFetch(`${API_BASE}/change-password`, {
-            method: 'POST',
-            body: JSON.stringify({
-                current_password: currentPassword,
-                new_password: newPassword
-            })
-        });
-        
-        if (response && response.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
-            showSuccess('Password changed successfully');
-        } else {
-            const error = await response.json();
-            showError(error.error || 'Failed to change password');
-        }
-    } catch (error) {
-        console.error('Error changing password:', error);
-        showError('Failed to change password');
-    }
-}
-
-// Reports functions - BUG FIX #1: Fixed report generation
-async function showReportsWithData() {
-    // Set default dates if not set
-    const startDateInput = document.getElementById('report-start-date');
-    const endDateInput = document.getElementById('report-end-date');
-    
-    if (!startDateInput.value || !endDateInput.value) {
-        // Set default to current month
-        const now = new Date();
-        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        
-        startDateInput.value = firstDay.toISOString().split('T')[0];
-        endDateInput.value = lastDay.toISOString().split('T')[0];
-    }
-    
-    // Auto-generate reports if dates are set
-    if (startDateInput.value && endDateInput.value) {
-        generateReports();
-    }
-}
-
-// BUG FIX #1: Fixed report generation function
+// Reports functions
 async function generateReports() {
     const startDate = document.getElementById('report-start-date').value;
     const endDate = document.getElementById('report-end-date').value;
@@ -1281,21 +1130,21 @@ async function generateReports() {
     }
     
     try {
-        // Fixed API endpoint call
+        // Use unified reports endpoint
         const response = await authenticatedFetch(`${API_BASE}/reports?start_date=${startDate}&end_date=${endDate}`);
-        if (response && response.ok) {
-            const reports = await response.json();
-            displayReports(reports);
-        } else {
-            showError('Failed to generate reports');
-        }
+        if (!response) return;
+        
+        const reportData = await response.json();
+        
+        displayReports(reportData.appointments, reportData.revenue);
+        
     } catch (error) {
         console.error('Error generating reports:', error);
         showError('Failed to generate reports');
     }
 }
 
-function displayReports(reports) {
+function displayReports(appointmentData, revenueData) {
     const container = document.getElementById('reports-content');
     if (!container) return;
     
@@ -1304,85 +1153,200 @@ function displayReports(reports) {
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-chart-bar me-2"></i>Appointment Statistics</h5>
+                        <h5><i class="fas fa-chart-pie me-2"></i>Appointments by Status</h5>
                     </div>
                     <div class="card-body">
-                        <p><strong>Total Appointments:</strong> ${reports.total_appointments || 0}</p>
-                        <p><strong>Completed:</strong> ${reports.completed_appointments || 0}</p>
-                        <p><strong>Cancelled:</strong> ${reports.cancelled_appointments || 0}</p>
-                        <p><strong>No Shows:</strong> ${reports.no_show_appointments || 0}</p>
+                        <canvas id="statusChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5><i class="fas fa-dollar-sign me-2"></i>Revenue Information</h5>
+                        <h5><i class="fas fa-chart-bar me-2"></i>Appointments by Treatment</h5>
                     </div>
                     <div class="card-body">
-                        <p><strong>Total Revenue:</strong> $${reports.total_revenue ? reports.total_revenue.toFixed(2) : '0.00'}</p>
-                        <p><strong>Average per Appointment:</strong> $${reports.average_revenue ? reports.average_revenue.toFixed(2) : '0.00'}</p>
+                        <canvas id="treatmentChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-line me-2"></i>Daily Appointments</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="dailyChart" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-dollar-sign me-2"></i>Revenue by Treatment</h5>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="revenueChart" height="300"></canvas>
                     </div>
                 </div>
             </div>
         </div>
     `;
+    
+    // Create charts
+    setTimeout(() => {
+        createStatusChart(appointmentData.by_status);
+        createTreatmentChart(appointmentData.by_treatment);
+        createDailyChart(appointmentData.daily_counts);
+        createRevenueChart(revenueData.by_treatment);
+    }, 100);
+}
+
+function createStatusChart(data) {
+    const ctx = document.getElementById('statusChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: data.map(item => item.status),
+            datasets: [{
+                data: data.map(item => item.count),
+                backgroundColor: ['#28a745', '#ffc107', '#dc3545', '#6c757d']
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+}
+
+function createTreatmentChart(data) {
+    const ctx = document.getElementById('treatmentChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: data.map(item => item.treatment_type),
+            datasets: [{
+                label: 'Appointments',
+                data: data.map(item => item.count),
+                backgroundColor: '#007bff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function createDailyChart(data) {
+    const ctx = document.getElementById('dailyChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: data.map(item => item.date),
+            datasets: [{
+                label: 'Daily Appointments',
+                data: data.map(item => item.count),
+                borderColor: '#28a745',
+                backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function createRevenueChart(data) {
+    const ctx = document.getElementById('revenueChart');
+    if (!ctx) return;
+    
+    new Chart(ctx.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: data.map(item => item.treatment_type),
+            datasets: [{
+                label: 'Revenue ($)',
+                data: data.map(item => item.total_revenue),
+                backgroundColor: '#198754'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+}
+
+function showReportsWithData() {
+    const container = document.getElementById('reports-content');
+    if (!container) return;
+    
+    // Show a message if no date range is selected
+    container.innerHTML = `
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle me-2"></i>Generate Reports</h5>
+            <p>Select a date range above and click "Generate Reports" to view detailed analytics and charts.</p>
+            <p><strong>Available Reports:</strong></p>
+            <ul>
+                <li>Appointments by Status (Scheduled, Completed, Cancelled, No-show)</li>
+                <li>Appointments by Treatment Type</li>
+                <li>Daily Appointment Trends</li>
+                <li>Revenue Analysis by Treatment</li>
+            </ul>
+        </div>
+    `;
 }
 
 // Utility functions
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+}
+
 function formatDate(dateString) {
-    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString();
 }
 
 function formatTime(dateString) {
-    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatDateTime(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function showSuccess(message) {
+    // You can implement a toast notification system here
+    alert(message);
 }
 
 function showError(message) {
-    // Create and show error alert
-    const alertDiv = document.createElement('div');
-    alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed';
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    document.body.appendChild(alertDiv);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.parentNode.removeChild(alertDiv);
-        }
-    }, 5000);
-}
-
-function showSuccess(message) {
-    // Create and show success alert
-    const alertDiv = document.createElement('div');
-    alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed';
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    document.body.appendChild(alertDiv);
-    
-    // Auto-remove after 3 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.parentNode.removeChild(alertDiv);
-        }
-    }, 3000);
+    // You can implement a toast notification system here
+    alert('Error: ' + message);
 }
 
