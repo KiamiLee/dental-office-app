@@ -278,13 +278,13 @@ async function loadDashboard() {
         
         displayTodayAppointments(todayAppointments);
         
-        // Load upcoming appointments
-        const upcomingResponse = await authenticatedFetch(`${API_BASE}/appointments/upcoming`);
-        if (!upcomingResponse) return;
+        // Load upcoming appointments - use all future appointments instead of just /upcoming endpoint
+        const allAppointmentsResponse = await authenticatedFetch(`${API_BASE}/appointments`);
+        if (!allAppointmentsResponse) return;
         
-        const upcomingAppointments = await upcomingResponse.json();
+        const allAppointments = await allAppointmentsResponse.json();
         
-        displayUpcomingAppointments(upcomingAppointments);
+        displayUpcomingAppointments(allAppointments);
         
     } catch (error) {
         console.error('Error loading dashboard:', error);
@@ -331,7 +331,7 @@ function displayTodayAppointments(appointments) {
         <div class="appointment-item ${appointment.status}">
             <div class="appointment-time">${formatTime(appointment.appointment_date)}</div>
             <div class="appointment-patient">${appointment.patient_name}</div>
-            <div class="appointment-treatment">${appointment.treatment_type}</div>
+            <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
         </div>
     `).join('');
 }
@@ -340,35 +340,33 @@ function displayUpcomingAppointments(appointments) {
     const container = document.getElementById('upcoming-appointments');
     if (!container) return;
     
-    // Filter to show only appointments from next day until end of week
-    const today = new Date();
-    const nextDay = new Date(today);
-    nextDay.setDate(today.getDate() + 1);
-
-
-    // Get end of current week (Sunday)
-    const endOfWeek = new Date(now);
-    endOfWeek.setDate(now.getDate() + (7 - now.getDay())); // Go to Sunday
-    endOfWeek.setHours(23, 59, 59, 999);
+    console.log('All appointments received:', appointments); // Debug log
     
-    //const endOfWeek = new Date(today);
-   // endOfWeek.setDate(today.getDate() + (7 - today.getDay()));
+    // Get current date and time
+    const now = new Date();
     
-    const filteredAppointments = appointments.filter(appointment => {
+    // Filter to show all future appointments (not just this week)
+    const futureAppointments = appointments.filter(appointment => {
         const appointmentDate = new Date(appointment.appointment_date);
-        return appointmentDate >= nextDay && appointmentDate <= endOfWeek;
+        console.log('Checking appointment:', appointmentDate, 'vs now:', now); // Debug log
+        return appointmentDate > now;
     });
     
-    if (filteredAppointments.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-plus"></i><p>No upcoming appointments this week</p></div>';
+    console.log('Future appointments found:', futureAppointments); // Debug log
+    
+    if (futureAppointments.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-calendar-plus"></i><p>No upcoming appointments</p></div>';
         return;
     }
     
-    container.innerHTML = filteredAppointments.slice(0, 5).map(appointment => `
+    // Sort by date and take first 5
+    futureAppointments.sort((a, b) => new Date(a.appointment_date) - new Date(b.appointment_date));
+    
+    container.innerHTML = futureAppointments.slice(0, 5).map(appointment => `
         <div class="appointment-item">
             <div class="appointment-time">${formatDateTime(appointment.appointment_date)}</div>
             <div class="appointment-patient">${appointment.patient_name}</div>
-            <div class="appointment-treatment">${appointment.treatment_type}</div>
+            <div class="appointment-treatment">${appointment.treatment_type || 'No treatment specified'}</div>
         </div>
     `).join('');
 }
@@ -637,7 +635,7 @@ function renderAppointments(appointmentList) {
         <tr>
             <td>${formatDateTime(appointment.appointment_date)}</td>
             <td>${appointment.patient_name}</td>
-            <td>${appointment.treatment_type}</td>
+            <td>${appointment.treatment_type || 'No treatment specified'}</td>
             <td><span class="badge status-${appointment.status}">${appointment.status}</span></td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" onclick="editAppointment(${appointment.id})">
